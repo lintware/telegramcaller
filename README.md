@@ -1,67 +1,226 @@
+<div align="center">
+
+<img src="docs/banner.svg" alt="tgcallskill — AI receptionist for your Telegram number" width="100%" />
+
 # tgcallskill
 
-> Auto-answer Telegram private calls with an ElevenLabs Conversational AI agent.
+**Auto-answer Telegram private calls with a real-time voice AI agent.**
 
-Your Telegram phone number rings → an AI agent picks up and has a real two-way voice conversation with the caller.
+Your Telegram phone number rings → an AI picks up and has a real two-way voice conversation with the caller.
 
-## What it does
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Made with uv](https://img.shields.io/badge/Made_with-uv-DE5FE9)](https://github.com/astral-sh/uv)
+[![Telegram MTProto](https://img.shields.io/badge/Telegram-MTProto-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/mtproto)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Convai-000000)](https://elevenlabs.io/app/conversational-ai)
+[![OpenAI Realtime](https://img.shields.io/badge/OpenAI-Realtime-412991?logo=openai&logoColor=white)](https://platform.openai.com/docs/guides/realtime)
+[![Gemini Live](https://img.shields.io/badge/Gemini-Live-4285F4?logo=googlegemini&logoColor=white)](https://ai.google.dev/api/multimodal-live)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](#license)
 
-- Signs in to a Telegram account via MTProto (Telethon).
-- Auto-accepts every incoming voice call to that account.
-- Streams the caller's voice into [ElevenLabs Conversational AI](https://elevenlabs.io/app/conversational-ai), gets the agent's reply, and pushes it back through the call.
+[**Setup wizard →**](https://tele.lintware.com) &nbsp;·&nbsp; [**Live demo**](#-demo) &nbsp;·&nbsp; [**Architecture**](#-architecture) &nbsp;·&nbsp; [**Providers**](#-providers)
 
-## Setup (5 min)
+</div>
 
-You need:
+---
 
-1. **Telegram API id + hash** — https://my.telegram.org → *API development tools*
-2. **The phone number** of the Telegram account that will answer
-3. **ElevenLabs API key** — https://elevenlabs.io → *Settings → API Keys*
-4. **ElevenLabs Agent ID** — create one at https://elevenlabs.io/app/conversational-ai
+## ✨ What it does
 
-Then:
+- 📞 **Signs in to a Telegram account via MTProto** (Telethon session, OTP + optional 2FA).
+- 🤖 **Auto-accepts every incoming voice call** to that account.
+- 🎙️ **Bridges live call audio** to a real-time voice-AI provider so the AI can both **hear the caller** and **speak back** in real time.
+- 🔌 **Provider-agnostic** — switch between **ElevenLabs Conversational AI**, **OpenAI Realtime**, or **Gemini Live** with a single `.env` value.
+
+> Tested end-to-end. Caller dials your Telegram number, an AI receptionist answers and holds a natural conversation.
+
+---
+
+## 🚀 Quickstart
 
 ```bash
 git clone https://github.com/vasanthsreeram/tgcallskill.git
 cd tgcallskill
-uv sync                # or: pip install -r requirements.txt
-cp .env.example .env   # fill in the 4 values above
-uv run python login.py # one-time: enter the Telegram SMS code (and 2FA if set)
-uv run python bridge.py
+uv sync
+cp .env.example .env       # fill in credentials, pick a VOICE_PROVIDER
+uv run python login.py     # one-time: enter Telegram OTP and 2FA if set
+uv run python bridge.py    # leave running — auto-answers every incoming call
 ```
 
-Now call the number from another Telegram account. The AI picks up.
+Or **skip the form-filling**: paste your keys at **<https://tele.lintware.com>** — the wizard generates your `.env` and the exact commands to run.
 
-Or use the hosted setup wizard at **https://tele.lintware.com** — it generates your `.env` and the exact commands to run.
+---
 
-## How it works (the parts that took the longest)
+## 🎬 Demo
 
-### Signalling (MTProto)
-On `updatePhoneCall → phoneCallRequested`, perform DH (`messages.getDhConfig`, `phone.acceptCall` with our `g_b`), receive the caller's `g_a` in the next update, derive the shared key. This is straight Telethon.
+```text
+2026-05-17 16:17:28 INFO  INCOMING_CALL user=495589406
+2026-05-17 16:17:28 INFO  EL ws opened chat=495589406
+2026-05-17 16:17:29 INFO  AGENT: Hello! How can I help you today?
+2026-05-17 16:17:29 INFO  ffmpeg decoder spawned pid=91376
+2026-05-17 16:17:29 INFO  ntgcalls.record() started -> /tmp/peer_495589406_1779005849.mp3
+2026-05-17 16:17:29 INFO  call fully armed (out + in)
+2026-05-17 16:17:34 INFO  USER:  Hi, are you able to hear me?
+2026-05-17 16:17:35 INFO  AGENT: Yes, I can hear you perfectly. How can I help?
+2026-05-17 16:17:42 INFO  USER:  Tell me something about you.
+2026-05-17 16:17:45 INFO  AGENT: I am an independent repair service…
+2026-05-17 16:17:46 INFO  DISCARDED_CALL user=495589406
+```
 
-### Outbound audio (agent → caller)
-`pytgcalls.play(chat_id, MediaStream(media_path=ExternalMedia.AUDIO, audio_parameters=AudioParameters(48000, 1)))` registers our process as the source. A player task ticks every 10 ms and `send_frame`s 960-byte chunks of 48 kHz mono PCM. The audio comes from an ElevenLabs websocket at 16 kHz; `audioop.ratecv` upsamples.
+A real session log from the test run that shipped this release.
 
-### Inbound audio (caller → agent) — the hard part
-`on_frames` does **not** deliver private-call peer audio. Workaround:
+---
+
+## 🔌 Providers
+
+| Provider          | `VOICE_PROVIDER` | Input → Output rate | Required env                                                  |
+|-------------------|------------------|---------------------|---------------------------------------------------------------|
+| ElevenLabs Convai | `elevenlabs`     | 16 kHz → 16 kHz     | `ELEVENLABS_API_KEY`, `EL_AGENT_ID`                           |
+| OpenAI Realtime   | `openai`         | 24 kHz → 24 kHz     | `OPENAI_API_KEY` (model + voice optional)                     |
+| Gemini Live       | `gemini`         | 16 kHz → 24 kHz     | `GOOGLE_API_KEY` (model + voice optional)                     |
+| xAI Grok          | `grok`           | —                   | Stub. No public realtime voice API yet; placeholder included. |
+
+The bridge handles 48 kHz ↔ provider-rate resampling internally — you don't worry about formats.
+
+Adding a new provider is a single file under `providers/` that implements `open / send_audio / recv / close`. See [`providers/base.py`](providers/base.py).
+
+---
+
+## 🧭 Architecture
+
+```mermaid
+flowchart LR
+    A[📱 Caller<br/>Telegram client] -- voice call --> B[Telegram<br/>servers]
+    B <--> C[**bridge.py**<br/>Telethon + pytgcalls<br/>auto-answer]
+
+    subgraph BRIDGE [tgcallskill]
+        direction TB
+        C --> D[ntgcalls<br/>ffmpeg → FIFO]
+        D -- MP3 stream --> E[ffmpeg decoder<br/>→ PCM]
+        E -- 16/24 kHz PCM --> F[Provider WS]
+        F -- PCM reply --> G[audioop resample<br/>→ 48 kHz]
+        G -- 10 ms frames --> C
+    end
+
+    F <-- audio --> H[("🤖 Voice agent<br/>ElevenLabs / OpenAI<br/>/ Gemini Live")]
+
+    style BRIDGE fill:#0b1020,stroke:#7cc4ff,color:#cfd6ec
+    style F fill:#1a0f2a,stroke:#c084fc,color:#fff
+    style H fill:#1a0f2a,stroke:#c084fc,color:#fff
+```
+
+### How the audio plumbing actually works
+
+| Direction              | Path                                                                                                                                                                                       |
+|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Caller → AI** (in)   | `pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3"))` → MP3 written to a **FIFO** → child `ffmpeg` decodes → PCM at provider rate → `provider.send_audio(...)`                       |
+| **AI → Caller** (out)  | provider websocket emits PCM at `provider.output_rate` → `audioop.ratecv` upsamples to 48 kHz → 10 ms / 960 B chunks → `pytgcalls.send_frame(..., Device.MICROPHONE, chunk)`                |
+
+> **Why the FIFO detour?** `on_frames` does not deliver private-call peer PCM in the current ntgcalls release. The FIFO+ffmpeg path is the working workaround.
+
+---
+
+## 🔧 Configuration
+
+All knobs live in `.env`. See [`.env.example`](.env.example) for the full set; the essentials are:
+
+```env
+# Telegram (always required)
+TG_API_ID=22053552
+TG_API_HASH=ee9c…
+TG_PHONE=+917881174135
+
+# Pick one
+VOICE_PROVIDER=elevenlabs        # elevenlabs | openai | gemini | grok
+
+# ElevenLabs
+ELEVENLABS_API_KEY=sk_…
+EL_AGENT_ID=agent_xxx
+```
+
+Switch provider → edit `VOICE_PROVIDER` → restart `bridge.py`. That's it.
+
+---
+
+## 📁 Project layout
 
 ```
-pytgcalls.record(chat_id, RecordStream(audio="/tmp/peer_<id>.mp3"))
+.
+├── bridge.py                       # the runtime
+├── login.py                        # one-time interactive Telethon auth
+├── providers/
+│   ├── base.py                     # Protocol every provider implements
+│   ├── elevenlabs.py
+│   ├── openai_realtime.py
+│   ├── gemini_live.py
+│   └── grok.py                     # stub
+├── skill/tgcallskill/SKILL.md      # Claude Code skill metadata
+├── site/                           # Cloudflare Pages setup wizard
+│   └── public/index.html
+├── docs/
+│   └── banner.svg
+└── .env.example
 ```
 
-ntgcalls' ffmpeg pipeline encodes peer audio to MP3 and writes it to the path. Make that path a FIFO (`os.mkfifo`). Spawn a second ffmpeg that reads the FIFO and decodes to 16 kHz mono PCM on stdout. A reader task base64-encodes each chunk and sends it as `user_audio_chunk` to the EL websocket.
+---
 
-### Loop hygiene
-`PyTgCalls(tele)` captures the running asyncio loop on construction — instantiate it **inside** `async def main()`, not at module top level, otherwise you hit `Future attached to a different loop` the first time a call arrives.
+## 🩺 Troubleshooting
 
-## Files
+<details>
+<summary><strong>Caller stuck on "exchanging encryption keys"</strong></summary>
 
-- `login.py` — one-time interactive Telethon login.
-- `bridge.py` — the runtime: MTProto auto-accept + EL bridge.
-- `.env.example` — credentials template.
-- `skill/tgcallskill/SKILL.md` — Claude Code skill metadata.
-- `site/` — Cloudflare Pages setup wizard (https://tele.lintware.com).
+You accepted MTProto signaling but never started the media plane. Make sure `pytgcalls.play(...)` runs inside the `INCOMING_CALL` handler, not just `phone.acceptCall`.
+</details>
 
-## License
+<details>
+<summary><strong>The agent can't hear the caller</strong></summary>
 
-MIT. Use at your own risk — answering calls automatically can confuse callers; tell them upfront.
+You're missing `pytgcalls.record(RecordStream(audio="/tmp/…mp3"))` after `play(...)`. The `on_frames` callback does **not** fire for private-call peer audio — the FIFO+ffmpeg route is the workaround used here.
+</details>
+
+<details>
+<summary><strong><code>Future attached to a different loop</code></strong></summary>
+
+`PyTgCalls(tele)` captures the running asyncio loop on construction. Build it **inside** your `async def main()` rather than at module top level.
+</details>
+
+<details>
+<summary><strong>Choppy outbound voice</strong></summary>
+
+Variable-size frames or wrong cadence. Standardise on **10 ms = 960 B** at 48 kHz mono and tick the player every 10 ms.
+</details>
+
+<details>
+<summary><strong>ElevenLabs <code>payment_required</code></strong></summary>
+
+Free plan blocks premade library voices via API. Use a custom voice from your account, or upgrade.
+</details>
+
+<details>
+<summary><strong>OpenAI Realtime 401 / 4xx</strong></summary>
+
+Ensure the request carries both `Authorization: Bearer …` **and** `OpenAI-Beta: realtime=v1`.
+</details>
+
+<details>
+<summary><strong>Gemini Live setup error</strong></summary>
+
+Use a model name in the `models/gemini-2.0-flash-exp` family and a valid `prebuilt_voice_config` voice (e.g. `Aoede`, `Puck`).
+</details>
+
+---
+
+## 🛡️ Privacy
+
+- The hosted wizard at **<https://tele.lintware.com>** is a fully static page. Credentials never leave your browser.
+- Your Telegram session file (`telecall.session`) stays on the machine running `bridge.py`. Don't commit it.
+- The bridge stores no audio by default. Recording paths in the code are diagnostic only and are git-ignored.
+
+---
+
+## 📜 License
+
+[MIT](LICENSE) — use at your own risk. Be courteous: tell the people calling you that they're talking to an AI.
+
+---
+
+<div align="center">
+  <sub>Built with <a href="https://core.telegram.org/mtproto">MTProto</a> · <a href="https://github.com/pytgcalls/pytgcalls">pytgcalls</a> · <a href="https://docs.telethon.dev">Telethon</a> · ❤️ a few well-placed FIFOs.</sub>
+</div>

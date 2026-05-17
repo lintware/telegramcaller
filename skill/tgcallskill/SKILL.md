@@ -1,67 +1,80 @@
 ---
 name: tgcallskill
-description: Auto-answer Telegram private calls with an ElevenLabs Conversational AI agent. Use when the user wants their Telegram phone number to be answered by an AI voice agent, set up a Telegram AI receptionist, or build a Telegram voice-call bot that converses with callers. Triggers on terms like "answer Telegram calls", "AI Telegram phone", "ElevenLabs Telegram", "Telegram voicebot", "auto-pickup Telegram".
+description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number to be answered by an AI voice agent — ElevenLabs Conversational AI, OpenAI Realtime, or Gemini Live (xAI Grok stub included). Triggers on terms like "answer Telegram calls", "AI Telegram phone", "Telegram voicebot", "auto-pickup Telegram", "OpenAI Realtime Telegram", "Gemini Live Telegram", "ElevenLabs Telegram".
 ---
 
 # tgcallskill — AI receptionist for your Telegram number
 
-This skill sets up a local Python service that:
-1. Signs in to a Telegram account via MTProto (Telethon session).
-2. Auto-answers every incoming private call to that account.
-3. Bridges the call audio to an **ElevenLabs Conversational AI agent** for real-time two-way voice conversation.
+Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to a real-time voice-AI provider for two-way conversation.
+
+Supported providers (set via `VOICE_PROVIDER` in `.env`):
+
+| Provider     | Value          | Native PCM in / out |
+|--------------|----------------|---------------------|
+| ElevenLabs   | `elevenlabs`   | 16 kHz / 16 kHz |
+| OpenAI       | `openai`       | 24 kHz / 24 kHz |
+| Gemini Live  | `gemini`       | 16 kHz / 24 kHz |
+| xAI Grok     | `grok`         | stub — no public realtime API yet |
+
+The bridge handles 48 kHz ↔ provider-rate resampling internally.
 
 ## When to use this skill
 
-Trigger this skill when the user asks for any of:
+Trigger when the user asks for any of:
 - "answer my Telegram calls with an AI"
 - "build a Telegram voicebot / receptionist"
-- "hook ElevenLabs agent to Telegram phone calls"
+- "hook OpenAI Realtime / Gemini Live / ElevenLabs to Telegram phone calls"
 - "Telegram auto-pickup with AI voice"
 
-## Prerequisites the user must provide
+## Credentials checklist
 
-Ask the user for these (the setup wizard at https://tele.lintware.com collects them too):
+Always required:
+1. **Telegram API id + hash** — https://my.telegram.org → API development tools.
+2. **Phone number** (with country code) of the account that will answer.
 
-1. **Telegram API credentials** from https://my.telegram.org → API development tools:
-   - `api_id` (integer)
-   - `api_hash` (hex string)
-2. **Phone number** of the Telegram account that will receive calls (with country code, e.g. `+917881174135`).
-3. **ElevenLabs API key** (`xi-api-key`) — https://elevenlabs.io → Settings → API Keys.
-4. **ElevenLabs Agent ID** — Create a Conversational AI agent at https://elevenlabs.io/app/conversational-ai → copy the `agent_xxx` ID.
+Provider-specific:
+- **ElevenLabs:** `ELEVENLABS_API_KEY` + `EL_AGENT_ID` (create at https://elevenlabs.io/app/conversational-ai).
+- **OpenAI:** `OPENAI_API_KEY`. Optional: `OPENAI_REALTIME_MODEL` (default `gpt-4o-realtime-preview`), `OPENAI_REALTIME_VOICE`.
+- **Gemini:** `GOOGLE_API_KEY`. Optional: `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_VOICE`.
 
-When the user runs the bridge for the first time, Telegram will SMS / message the login code; if the account has 2FA, ask for the cloud password too.
+The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
 
-## Setup steps
+## Setup
 
 ```bash
 git clone https://github.com/vasanthsreeram/tgcallskill.git
 cd tgcallskill
 uv sync
-cp .env.example .env  # then fill in the 4 values above
-uv run python login.py   # one-time, interactive — enter SMS code + 2FA
-uv run python bridge.py  # leave running; auto-answers calls
+cp .env.example .env  # fill in credentials, pick VOICE_PROVIDER
+uv run python login.py   # one-time interactive — enter Telegram OTP and 2FA if set
+uv run python bridge.py
 ```
 
-## How the audio plumbing works (so you can debug)
+## How the audio plumbing works
 
-- **Outbound (agent → caller):** ElevenLabs websocket emits 16 kHz PCM → `audioop.ratecv` upsamples to 48 kHz → `pytgcalls.send_frame` pushes 10 ms / 960 B chunks.
-- **Inbound (caller → agent):** `pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3"))` makes ntgcalls' ffmpeg pipeline write peer audio as MP3 into a FIFO → a child `ffmpeg` decodes the FIFO to 16 kHz mono PCM on stdout → a reader task forwards base64-encoded chunks as `user_audio_chunk` over the EL websocket.
-- The `on_frames` callback is **not** used — ntgcalls doesn't deliver private-call peer PCM that way. The FIFO+ffmpeg detour is the working path.
+- **Outbound (agent → caller):** provider websocket emits PCM at `provider.output_rate` → `audioop.ratecv` upsamples to 48 kHz → `pytgcalls.send_frame` 10 ms / 960 B chunks.
+- **Inbound (caller → agent):** `pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3"))` makes ntgcalls' ffmpeg pipeline write peer audio as MP3 into a FIFO → a child `ffmpeg` decodes the FIFO to PCM at `provider.input_rate` on stdout → a reader task forwards chunks to `provider.send_audio`.
+- The `on_frames` callback is **not** used — ntgcalls doesn't deliver private-call peer PCM through it. The FIFO+ffmpeg detour is the workaround.
+
+## Provider interface
+
+To add a new provider, implement `providers/base.Provider` (open / send_audio / recv / close, plus `input_rate` and `output_rate` ints), register it in `providers/__init__.py`, then set `VOICE_PROVIDER=<your-name>` in `.env`.
 
 ## Common failure modes
 
-- **"Exchanging encryption keys" forever on the caller side:** you accepted MTProto signaling but didn't start the media plane. Check that `pytgcalls.play(...)` is called inside the `INCOMING_CALL` handler, not just `phone.acceptCall`.
-- **Agent can't hear caller:** you didn't call `pytgcalls.record(...)` with a FIFO path. The `on_frames` route is broken for private calls; the FIFO route is the workaround.
-- **"Future attached to a different loop":** you instantiated `PyTgCalls(...)` at module level before any asyncio loop existed. Construct it inside your async `main()`.
-- **Choppy outbound audio:** you sent variable-size frames. Standardise on 10 ms = 960 B at 48 kHz mono.
-- **`payment_required` from ElevenLabs:** the free plan blocks library/premade voices via API. Use a custom voice or upgrade.
+- **"Exchanging encryption keys" forever:** signaling accepted but media plane not started. Ensure `pytgcalls.play(...)` runs inside the `INCOMING_CALL` handler.
+- **Agent can't hear caller:** `pytgcalls.record(...)` was not called with a FIFO path. `on_frames` does not work for private calls.
+- **`Future attached to a different loop`:** `PyTgCalls(...)` was constructed at module level. Move it inside the async `main()`.
+- **Choppy outbound audio:** variable frame sizes. Standardise on 10 ms / 960 B at 48 kHz mono.
+- **`payment_required` from ElevenLabs:** free plan blocks premade voices via API; use a custom voice or upgrade.
+- **OpenAI Realtime auth error:** verify the `OpenAI-Beta: realtime=v1` header and the bearer token.
+- **Gemini Live 4xx on setup:** model name must be `models/gemini-2.0-flash-exp` (or newer); voice must be a valid `prebuilt_voice_config` voice.
 
-## Skill deliverable
+## Deliverable when invoked
 
-When invoked, run through the checklist:
-1. Confirm the user has the four credentials above.
-2. `git clone` the repo (or scaffold inline if offline).
-3. Create `.env` from `.env.example` with the user's values.
-4. Run `login.py` and pass the user's OTP / 2FA when prompted.
-5. Run `bridge.py` and ask the user to place a test call.
-6. If anything fails, consult the "Common failure modes" section.
+1. Confirm Telegram creds + chosen provider creds.
+2. `git clone` the repo.
+3. Generate `.env` from `.env.example`.
+4. Run `login.py`, feed OTP / 2FA.
+5. Run `bridge.py`, ask user to place a test call.
+6. On failure, consult the table above.

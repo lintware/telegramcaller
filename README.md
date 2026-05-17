@@ -35,6 +35,19 @@ Your Telegram phone number rings → an AI picks up and has a real two-way voice
 
 ## 🚀 Quickstart
 
+> **Platform support:** macOS · Linux · Windows (via WSL2). The runtime relies on Unix named pipes (`os.mkfifo`) and `/tmp` for the inbound-audio plumbing, so **Windows users must run inside [WSL2](https://learn.microsoft.com/windows/wsl/install)** — `wsl --install` from PowerShell, then follow the Linux steps below.
+
+### 1. Install system deps
+
+| OS                | One-liner                                                                                       |
+|-------------------|-------------------------------------------------------------------------------------------------|
+| **macOS**         | `brew install ffmpeg uv python@3.12`                                                            |
+| **Linux** (Debian)| `sudo apt update && sudo apt install -y ffmpeg python3.12 && curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| **Linux** (Arch)  | `sudo pacman -S ffmpeg python uv`                                                               |
+| **Windows**       | In an admin PowerShell: `wsl --install -d Ubuntu` → reboot → open Ubuntu → run the Debian line above. |
+
+### 2. Get the code & run
+
 ```bash
 git clone https://github.com/vasanthsreeram/tgcallskill.git
 cd tgcallskill

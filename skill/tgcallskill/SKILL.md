@@ -41,6 +41,15 @@ The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pag
 
 ## Setup
 
+**Platform note:** runs on macOS and Linux natively. On Windows the user must install **WSL2** first (`wsl --install -d Ubuntu` in an admin PowerShell, then work inside the Ubuntu shell) — the bridge uses Unix named pipes and `/tmp`, so it will not run in native Windows Python.
+
+System dependencies (per OS):
+- macOS: `brew install ffmpeg uv python@3.12`
+- Debian/Ubuntu (incl. WSL): `sudo apt install -y ffmpeg python3.12 && curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Arch: `sudo pacman -S ffmpeg python uv`
+
+Then:
+
 ```bash
 git clone https://github.com/vasanthsreeram/tgcallskill.git
 cd tgcallskill

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>tgcallskill — AI receptionist for your Telegram number</title>
+<meta name="description" content="Auto-answer Telegram calls with an ElevenLabs voice agent. Paste your keys, get a one-command setup." />
+<style>
+  :root {
+    --bg: #0a0a0c; --fg: #ededed; --mut: #8a8a8a; --acc: #6cf; --warn: #ffb86c;
+    --card: #15161a; --bd: #232429;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "SF Pro Text", sans-serif;
+    background: var(--bg); color: var(--fg);
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .tag { color: var(--mut); margin: 0 0 32px; }
+  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; margin-bottom: 18px; }
+  h2 { font-size: 16px; margin: 0 0 14px; letter-spacing: .02em; text-transform: uppercase; color: var(--mut); }
+  label { display: block; font-size: 13px; color: var(--mut); margin: 12px 0 4px; }
+  input { width: 100%; padding: 10px 12px; background: #0d0e11; border: 1px solid var(--bd); color: var(--fg); border-radius: 8px; font: inherit; }
+  input:focus { outline: none; border-color: var(--acc); }
+  .hint { font-size: 12px; color: var(--mut); margin-top: 4px; }
+  .hint a { color: var(--acc); }
+  button { margin-top: 18px; background: var(--acc); color: #001620; border: 0; padding: 10px 16px; font: 600 14px/1 inherit; border-radius: 8px; cursor: pointer; }
+  pre {
+    background: #07080a; border: 1px solid var(--bd); border-radius: 8px;
+    padding: 14px; overflow: auto; font-size: 13px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pill { display: inline-block; background: #2a1e10; color: var(--warn); padding: 2px 8px; border-radius: 999px; font-size: 11px; letter-spacing: .04em; }
+  footer { color: var(--mut); font-size: 12px; margin-top: 32px; }
+  footer a { color: var(--acc); }
+  .copy { float: right; background: transparent; border: 1px solid var(--bd); color: var(--mut); padding: 4px 10px; font-size: 12px; cursor: pointer; border-radius: 6px; margin-top: 0; }
+  .copy:hover { color: var(--fg); border-color: var(--mut); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>tgcallskill <span class="pill">private preview</span></h1>
+  <p class="tag">Paste four credentials below — get the exact commands to make your Telegram number answered by an AI voice agent.</p>
+
+  <form id="wiz" class="card">
+    <h2>1. Telegram</h2>
+    <p class="hint">Get these from <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org → API development tools</a>.</p>
+    <div class="row">
+      <div>
+        <label for="api_id">API ID</label>
+        <input id="api_id" required inputmode="numeric" placeholder="22053552" />
+      </div>
+      <div>
+        <label for="api_hash">API Hash</label>
+        <input id="api_hash" required placeholder="ee9c…" />
+      </div>
+    </div>
+    <label for="phone">Phone number (with country code)</label>
+    <input id="phone" required placeholder="+917881174135" />
+
+    <h2 style="margin-top:24px">2. ElevenLabs</h2>
+    <p class="hint">Key from <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">Settings → API Keys</a>. Agent from <a href="https://elevenlabs.io/app/conversational-ai" target="_blank" rel="noopener">Conversational AI</a>.</p>
+    <label for="el_key">API Key</label>
+    <input id="el_key" required placeholder="sk_…" />
+    <label for="agent_id">Agent ID</label>
+    <input id="agent_id" required placeholder="agent_xxxx" />
+
+    <button type="submit">Generate setup</button>
+  </form>
+
+  <div id="out" style="display:none">
+    <div class="card">
+      <h2>.env <button type="button" class="copy" data-target="envblock">copy</button></h2>
+      <pre id="envblock"></pre>
+    </div>
+    <div class="card">
+      <h2>Run these <button type="button" class="copy" data-target="cmdblock">copy</button></h2>
+      <pre id="cmdblock"></pre>
+      <p class="hint">First time only: <code>login.py</code> will prompt for the Telegram SMS code (and 2FA password if your account has it).</p>
+    </div>
+  </div>
+
+  <footer>
+    Source: <a href="https://github.com/vasanthsreeram/tgcallskill">github.com/vasanthsreeram/tgcallskill</a>.
+    Credentials are never sent anywhere — this page is fully static, the form runs entirely in your browser.
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+$('wiz').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = id => $(id).value.trim();
+  const env = [
+    `TG_API_ID=${v('api_id')}`,
+    `TG_API_HASH=${v('api_hash')}`,
+    `TG_PHONE=${v('phone')}`,
+    `TG_SESSION=telecall`,
+    `ELEVENLABS_API_KEY=${v('el_key')}`,
+    `EL_AGENT_ID=${v('agent_id')}`,
+  ].join('\n');
+  $('envblock').textContent = env;
+  $('cmdblock').textContent =
+`git clone https://github.com/vasanthsreeram/tgcallskill.git
+cd tgcallskill
+cat > .env <<'EOF'
+${env}
+EOF
+uv sync
+uv run python login.py
+uv run python bridge.py`;
+  $('out').style.display = '';
+  $('out').scrollIntoView({behavior: 'smooth'});
+});
+document.querySelectorAll('.copy').forEach(b => b.onclick = async () => {
+  const el = document.getElementById(b.dataset.target);
+  await navigator.clipboard.writeText(el.textContent);
+  const old = b.textContent; b.textContent = 'copied'; setTimeout(()=>b.textContent=old, 1200);
+});
+</script>
+</body>
+</html>

@@ -1,22 +1,20 @@
-"""Telegram private-call <-> ElevenLabs Conversational AI bridge (v4).
+"""Telegram private-call <-> Voice-Agent bridge.
+
+Provider-agnostic: set VOICE_PROVIDER in .env to elevenlabs / openai / gemini.
 
 Architecture:
   * Telethon signs in; pytgcalls auto-accepts incoming calls.
-  * Outbound: ExternalMedia.AUDIO + send_frame at 10ms cadence streams the
-    agent's PCM (upsampled 16k -> 48k) to the call.
-  * Inbound (this is the hard part — on_frames doesn't deliver private-call
-    peer audio): we tell ntgcalls to record peer audio to a named-pipe FIFO
-    as MP3, then spawn an ffmpeg subprocess that reads the FIFO and emits
-    16kHz mono PCM on stdout. A task reads that PCM, base64-encodes it, and
-    pushes it to the ElevenLabs Conversational AI websocket.
+  * Outbound: provider emits PCM at provider.output_rate -> upsample to 48k ->
+    pytgcalls.send_frame in 10 ms chunks.
+  * Inbound: pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3")) makes
+    ntgcalls' ffmpeg pipeline write peer audio as MP3 into a FIFO -> a child
+    ffmpeg decodes the FIFO to PCM at provider.input_rate on stdout ->
+    a reader task forwards chunks to the provider's send_audio.
 """
 import asyncio
 import audioop
-import base64
-import json
 import logging
 import os
-import stat
 import time
 
 from dotenv import load_dotenv
@@ -26,34 +24,33 @@ from pytgcalls.types import (
 )
 from pytgcalls.types.raw import AudioParameters
 from telethon import TelegramClient
-import websockets
+
+from providers import make_provider
 
 load_dotenv()
 API_ID = int(os.environ["TG_API_ID"])
 API_HASH = os.environ["TG_API_HASH"]
 SESSION = os.environ.get("TG_SESSION", "telecall")
-EL_API_KEY = os.environ["ELEVENLABS_API_KEY"]
-EL_AGENT_ID = os.environ.get("EL_AGENT_ID", "agent_7601krt8vj3dfjwrgm5r6jym6zes")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("telecall.bridge")
 
 CALL_RATE = 48000
 FRAME_MS = 10
-FRAME_BYTES = int(CALL_RATE * 1 * 2 * FRAME_MS / 1000)  # 960 bytes / 10ms mono 48k
+FRAME_BYTES = int(CALL_RATE * 1 * 2 * FRAME_MS / 1000)  # 960 @ 48k mono 10ms
 
 sessions: dict[int, dict] = {}
 
 
-async def el_session(chat_id: int):
-    url = f"wss://api.elevenlabs.io/v1/convai/conversation?agent_id={EL_AGENT_ID}"
-    ws = await websockets.connect(url, additional_headers={"xi-api-key": EL_API_KEY})
-    await ws.send(json.dumps({"type": "conversation_initiation_client_data"}))
-    log.info("EL ws opened chat=%s", chat_id)
+async def open_session(chat_id: int):
+    provider = make_provider()
+    await provider.open()
+    log.info("provider=%s opened (in=%d out=%d)",
+             provider.name, provider.input_rate, provider.output_rate)
 
     state = {
-        "ws": ws,
-        "up_state": None,
+        "provider": provider,
+        "up_state": None,    # provider.output_rate -> 48k
         "playback_buf": bytearray(),
         "ffmpeg_proc": None,
         "fifo_path": None,
@@ -62,25 +59,23 @@ async def el_session(chat_id: int):
 
     async def reader():
         try:
-            async for msg in ws:
-                d = json.loads(msg)
-                t = d.get("type")
+            async for ev in provider.recv():
+                t = ev.get("type")
                 if t == "audio":
-                    pcm16k = base64.b64decode(d["audio_event"]["audio_base_64"])
-                    pcm48k, state["up_state"] = audioop.ratecv(
-                        pcm16k, 2, 1, 16000, 48000, state["up_state"]
-                    )
-                    state["playback_buf"].extend(pcm48k)
-                elif t == "ping":
-                    await ws.send(json.dumps({"type": "pong", "event_id": d["ping_event"]["event_id"]}))
-                elif t == "interruption":
+                    pcm = ev["pcm"]
+                    if provider.output_rate != CALL_RATE:
+                        pcm, state["up_state"] = audioop.ratecv(
+                            pcm, 2, 1, provider.output_rate, CALL_RATE, state["up_state"]
+                        )
+                    state["playback_buf"].extend(pcm)
+                elif t == "interrupt":
                     state["playback_buf"].clear()
-                elif t == "user_transcript":
-                    log.info("USER: %s", d.get("user_transcription_event", {}).get("user_transcript"))
-                elif t == "agent_response":
-                    log.info("AGENT: %s", d.get("agent_response_event", {}).get("agent_response"))
+                elif t == "user_text":
+                    log.info("USER: %s", ev.get("text", ""))
+                elif t == "agent_text":
+                    log.info("AGENT: %s", ev.get("text", ""))
         except Exception as e:
-            log.info("EL reader exit: %s", e)
+            log.info("provider reader exit: %s", e)
 
     state["reader_task"] = asyncio.create_task(reader())
     return state
@@ -114,31 +109,25 @@ def start_player(chat_id: int, calls: PyTgCalls):
 
 
 async def start_inbound_pipe(chat_id: int, calls: PyTgCalls):
-    """FIFO -> ntgcalls writes mp3 -> ffmpeg decodes -> raw 16k PCM -> EL ws."""
+    """FIFO + ffmpeg -> provider.send_audio loop."""
     state = sessions[chat_id]
+    provider = state["provider"]
     fifo_path = f"/tmp/peer_{chat_id}_{int(time.time())}.mp3"
-    try:
-        os.unlink(fifo_path)
-    except FileNotFoundError:
-        pass
+    try: os.unlink(fifo_path)
+    except FileNotFoundError: pass
     os.mkfifo(fifo_path)
     state["fifo_path"] = fifo_path
-    log.info("FIFO created: %s", fifo_path)
 
-    # Spawn ffmpeg reading mp3 from FIFO, emitting 16k mono PCM on stdout.
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-loglevel", "error",
         "-f", "mp3", "-i", fifo_path,
-        "-f", "s16le", "-ac", "1", "-ar", "16000",
+        "-f", "s16le", "-ac", "1", "-ar", str(provider.input_rate),
         "-",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     state["ffmpeg_proc"] = proc
-    log.info("ffmpeg decoder spawned pid=%s", proc.pid)
+    log.info("ffmpeg decoder spawned pid=%s (-> %d Hz)", proc.pid, provider.input_rate)
 
-    # Tell ntgcalls to start recording peer audio into the FIFO.
-    # NOTE: this call BLOCKS until something opens the read end (ffmpeg does that).
     await calls.record(
         chat_id,
         RecordStream(audio=fifo_path, audio_parameters=AudioParameters(CALL_RATE, 1)),
@@ -146,23 +135,22 @@ async def start_inbound_pipe(chat_id: int, calls: PyTgCalls):
     log.info("ntgcalls.record() started -> %s", fifo_path)
 
     async def reader():
+        # ~100 ms chunks
+        chunk_bytes = int(provider.input_rate * 2 * 0.1)
         sent = 0
         try:
             while True:
-                chunk = await proc.stdout.read(3200)  # 100ms @ 16k mono PCM16
+                chunk = await proc.stdout.read(chunk_bytes)
                 if not chunk:
                     break
                 sent += len(chunk)
                 try:
-                    await state["ws"].send(json.dumps({
-                        "user_audio_chunk": base64.b64encode(chunk).decode("ascii"),
-                    }))
+                    await provider.send_audio(chunk)
                 except Exception as e:
-                    log.info("EL send failed: %s", e); break
-            log.info("ffmpeg reader exit, %d PCM bytes -> EL", sent)
+                    log.info("provider send err: %s", e); break
+            log.info("inbound reader exit, %d bytes -> provider", sent)
         except asyncio.CancelledError:
             pass
-
     state["inbound_task"] = asyncio.create_task(reader())
 
 
@@ -172,8 +160,7 @@ async def close_session(chat_id: int):
         return
     for k in ("reader_task", "player_task", "inbound_task"):
         t = state.get(k)
-        if t:
-            t.cancel()
+        if t: t.cancel()
     proc = state.get("ffmpeg_proc")
     if proc and proc.returncode is None:
         try:
@@ -182,7 +169,7 @@ async def close_session(chat_id: int):
         except Exception:
             try: proc.kill()
             except Exception: pass
-    try: await state["ws"].close()
+    try: await state["provider"].close()
     except Exception: pass
     fifo = state.get("fifo_path")
     if fifo:
@@ -201,11 +188,13 @@ async def main():
             if update.status & ChatUpdate.Status.INCOMING_CALL:
                 log.info("INCOMING_CALL user=%s", update.chat_id)
                 try:
-                    await el_session(update.chat_id)
+                    await open_session(update.chat_id)
                     await calls.play(
                         update.chat_id,
-                        MediaStream(media_path=ExternalMedia.AUDIO,
-                                    audio_parameters=AudioParameters(CALL_RATE, 1)),
+                        MediaStream(
+                            media_path=ExternalMedia.AUDIO,
+                            audio_parameters=AudioParameters(CALL_RATE, 1),
+                        ),
                     )
                     await start_inbound_pipe(update.chat_id, calls)
                     await asyncio.sleep(0.3)
@@ -220,7 +209,8 @@ async def main():
 
     await calls.start()
     me = await tele.get_me()
-    log.info("READY as %s (+%s). Call to test conversation.", me.first_name, me.phone)
+    log.info("READY as %s (+%s) provider=%s. Call to test.",
+             me.first_name, me.phone, os.environ.get("VOICE_PROVIDER", "elevenlabs"))
     while True:
         await asyncio.sleep(3600)
 

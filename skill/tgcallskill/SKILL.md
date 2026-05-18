@@ -1,6 +1,6 @@
 ---
 name: tgcallskill
-description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number to be answered by an AI voice agent — ElevenLabs Conversational AI, OpenAI Realtime, or Gemini Live (xAI Grok stub included). Triggers on terms like "answer Telegram calls", "AI Telegram phone", "Telegram voicebot", "auto-pickup Telegram", "OpenAI Realtime Telegram", "Gemini Live Telegram", "ElevenLabs Telegram".
+description: Auto-answer Telegram private calls with a voice AI agent. Use when the user wants their Telegram phone number to be answered by an AI voice agent — ElevenLabs Conversational AI, OpenAI Realtime, Gemini Live, or turn-based xAI STT → OpenClaw/Chippy → xAI TTS. Triggers on terms like "answer Telegram calls", "AI Telegram phone", "Telegram voicebot", "auto-pickup Telegram", "OpenAI Realtime Telegram", "Gemini Live Telegram", "ElevenLabs Telegram", "xAI STT TTS Chippy".
 ---
 
 # tgcallskill — AI receptionist for your Telegram number
@@ -15,8 +15,9 @@ Supported providers (set via `VOICE_PROVIDER` in `.env`):
 | OpenAI       | `openai`       | 24 kHz / 24 kHz |
 | Gemini Live  | `gemini`       | 16 kHz / 24 kHz |
 | xAI Grok     | `grok`         | stub — no public realtime API yet |
+| xAI STT/TTS + Chippy | `xai_turn` | 16 kHz / 24 kHz |
 
-The bridge handles 48 kHz ↔ provider-rate resampling internally.
+The bridge handles 48 kHz ↔ provider-rate resampling internally. `xai_turn` is turn-based: xAI STT final transcript → local `openclaw agent` → xAI TTS audio.
 
 ## When to use this skill
 
@@ -36,6 +37,7 @@ Provider-specific:
 - **ElevenLabs:** `ELEVENLABS_API_KEY` + `EL_AGENT_ID` (create at https://elevenlabs.io/app/conversational-ai).
 - **OpenAI:** `OPENAI_API_KEY`. Optional: `OPENAI_REALTIME_MODEL` (default `gpt-4o-realtime-preview`), `OPENAI_REALTIME_VOICE`.
 - **Gemini:** `GOOGLE_API_KEY`. Optional: `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_VOICE`.
+- **xAI turn mode:** `XAI_API_KEY`; set `VOICE_PROVIDER=xai_turn`. Optional: `XAI_STT_ENDPOINTING_MS`, `XAI_TTS_VOICE`, `OPENCLAW_VOICE_SESSION_ID`.
 
 The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
 

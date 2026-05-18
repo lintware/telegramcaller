@@ -24,9 +24,12 @@ def make_provider() -> Provider:
     if kind in ("grok", "xai"):
         from .grok import GrokProvider
         return GrokProvider()
+    if kind in ("xai_turn", "xai_stt_tts", "chippy_xai"):
+        from .xai_turn import XAITurnProvider
+        return XAITurnProvider()
     raise SystemExit(
         f"Unknown VOICE_PROVIDER={kind!r}. "
-        "Supported: elevenlabs, openai, gemini, grok."
+        "Supported: elevenlabs, openai, gemini, grok, xai_turn."
     )
 
 

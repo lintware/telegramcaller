@@ -27,7 +27,7 @@ Your Telegram phone number rings → an AI picks up and has a real two-way voice
 - 📞 **Signs in to a Telegram account via MTProto** (Telethon session, OTP + optional 2FA).
 - 🤖 **Auto-accepts every incoming voice call** to that account.
 - 🎙️ **Bridges live call audio** to a real-time voice-AI provider so the AI can both **hear the caller** and **speak back** in real time.
-- 🔌 **Provider-agnostic** — switch between **ElevenLabs Conversational AI**, **OpenAI Realtime**, or **Gemini Live** with a single `.env` value.
+- 🔌 **Provider-agnostic** — switch between **ElevenLabs Conversational AI**, **OpenAI Realtime**, **Gemini Live**, or turn-based **xAI STT → OpenClaw → xAI TTS** with a single `.env` value.
 
 > Tested end-to-end. Caller dials your Telegram number, an AI receptionist answers and holds a natural conversation.
 
@@ -89,8 +89,11 @@ A real session log from the test run that shipped this release.
 | OpenAI Realtime   | `openai`         | 24 kHz → 24 kHz     | `OPENAI_API_KEY` (model + voice optional)                     |
 | Gemini Live       | `gemini`         | 16 kHz → 24 kHz     | `GOOGLE_API_KEY` (model + voice optional)                     |
 | xAI Grok          | `grok`           | —                   | Stub. No public realtime voice API yet; placeholder included. |
+| xAI STT/TTS + Chippy | `xai_turn`    | 16 kHz → 24 kHz     | `XAI_API_KEY`; calls local `openclaw agent` for replies.       |
 
 The bridge handles 48 kHz ↔ provider-rate resampling internally — you don't worry about formats.
+
+`xai_turn` is turn-based rather than speech-to-speech: caller audio streams to xAI STT, only final utterance text is sent to OpenClaw/Chippy, then the final reply is synthesized through xAI TTS. It is slower, but it uses your normal OpenClaw tools/memory instead of the provider's realtime brain.
 
 Adding a new provider is a single file under `providers/` that implements `open / send_audio / recv / close`. See [`providers/base.py`](providers/base.py).
 
@@ -112,7 +115,7 @@ flowchart LR
         G -- 10 ms frames --> C
     end
 
-    F <-- audio --> H[("🤖 Voice agent<br/>ElevenLabs / OpenAI<br/>/ Gemini Live")]
+    F <-- audio/text --> H[("🤖 Voice agent<br/>ElevenLabs / OpenAI<br/>/ Gemini Live<br/>or xAI STT → OpenClaw → TTS")]
 
     style BRIDGE fill:#0b1020,stroke:#7cc4ff,color:#cfd6ec
     style F fill:#1a0f2a,stroke:#c084fc,color:#fff
@@ -141,11 +144,17 @@ TG_API_HASH=ee9c…
 TG_PHONE=+917881174135
 
 # Pick one
-VOICE_PROVIDER=elevenlabs        # elevenlabs | openai | gemini | grok
+VOICE_PROVIDER=elevenlabs        # elevenlabs | openai | gemini | grok | xai_turn
 
 # ElevenLabs
 ELEVENLABS_API_KEY=sk_…
 EL_AGENT_ID=agent_xxx
+
+# xAI turn-based Chippy mode
+XAI_API_KEY=xai_…
+XAI_STT_ENDPOINTING_MS=700
+XAI_TTS_VOICE=eve
+OPENCLAW_VOICE_SESSION_ID=tgcallskill-voice
 ```
 
 Switch provider → edit `VOICE_PROVIDER` → restart `bridge.py`. That's it.
@@ -163,7 +172,8 @@ Switch provider → edit `VOICE_PROVIDER` → restart `bridge.py`. That's it.
 │   ├── elevenlabs.py
 │   ├── openai_realtime.py
 │   ├── gemini_live.py
-│   └── grok.py                     # stub
+│   ├── grok.py                     # stub
+│   └── xai_turn.py                 # xAI STT → OpenClaw → xAI TTS
 ├── skill/tgcallskill/SKILL.md      # Claude Code skill metadata
 ├── site/                           # Cloudflare Pages setup wizard
 │   └── public/index.html
@@ -209,13 +219,19 @@ Free plan blocks premade library voices via API. Use a custom voice from your ac
 <details>
 <summary><strong>OpenAI Realtime 401 / 4xx</strong></summary>
 
-Ensure the request carries both `Authorization: Bearer …` **and** `OpenAI-Beta: realtime=v1`.
+For `gpt-realtime-2`, use the newer session shape without the legacy `OpenAI-Beta: realtime=v1` header. For older preview models, verify the model-specific Realtime auth requirements.
 </details>
 
 <details>
 <summary><strong>Gemini Live setup error</strong></summary>
 
 Use a model name in the `models/gemini-2.0-flash-exp` family and a valid `prebuilt_voice_config` voice (e.g. `Aoede`, `Puck`).
+</details>
+
+<details>
+<summary><strong>xAI turn-based mode is slower</strong></summary>
+
+That is expected. `VOICE_PROVIDER=xai_turn` does STT → `openclaw agent` → TTS for each final utterance. It gives you normal OpenClaw/Chippy capabilities, but it will not interrupt or respond as instantly as a speech-to-speech realtime model.
 </details>
 
 ---

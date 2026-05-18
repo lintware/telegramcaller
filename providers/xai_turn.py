@@ -123,9 +123,13 @@ class XAITurnProvider:
     def _ask_openclaw(self, user_text: str) -> str:
         instruction = os.environ.get(
             "OPENCLAW_VOICE_INSTRUCTION",
-            "You are Chippy on a Telegram voice call with Vas. Reply with only the concise, spoken response Vas should hear. No markdown, no tool logs, no internal notes. If you need to use tools, do it, then answer briefly.",
+            "You are Chippy, Vas's personal assistant, currently speaking with Vas on a live Telegram voice call. "
+            "This is spoken conversation, so answer naturally, briefly, and directly. "
+            "Use Vas's context, memory, and tools when helpful, but never expose tool logs, hidden reasoning, or internal implementation. "
+            "If an external/destructive action is needed, ask for confirmation instead of doing it silently. "
+            "Reply with only the exact user-facing words Vas should hear over the call. No markdown.",
         )
-        message = f"{instruction}\n\nVas said: {user_text}"
+        message = f"{instruction}\n\nCurrent call context: Vas is on the other side of this Telegram voice call. Treat this as live spoken dialogue.\n\nVas said: {user_text}"
         cmd = [
             "openclaw", "agent",
             "--session-id", self.openclaw_session_id,

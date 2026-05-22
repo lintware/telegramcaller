@@ -8,5 +8,6 @@ node_modules/
 .wrangler/
 peer_*.mp3
 recording_*.wav
+recordings/
 *.log
 greeting.mp3

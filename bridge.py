@@ -13,9 +13,12 @@ Architecture:
 """
 import asyncio
 import audioop
+from datetime import datetime, timezone
 import logging
 import os
+from pathlib import Path
 import time
+import wave
 
 from dotenv import load_dotenv
 from pytgcalls import PyTgCalls
@@ -39,6 +42,7 @@ CALL_RATE = 48000
 FRAME_MS = 10
 FRAME_BYTES = int(CALL_RATE * 1 * 2 * FRAME_MS / 1000)  # 960 @ 48k mono 10ms
 TELEGRAM_ACCOUNT_NAME = os.environ.get("TELEGRAM_ACCOUNT_NAME", "")
+CALL_RECORDINGS_DIR = Path(os.environ.get("CALL_RECORDINGS_DIR", "recordings"))
 
 sessions: dict[int, dict] = {}
 
@@ -48,20 +52,60 @@ def telegram_account_display_name(me) -> str:
     return full_name or me.username or "ChatGPT"
 
 
+def open_recording(path: Path) -> wave.Wave_write:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wav = wave.open(str(path), "wb")
+    wav.setnchannels(1)
+    wav.setsampwidth(2)
+    wav.setframerate(CALL_RATE)
+    return wav
+
+
+def mix_recordings(caller_path: Path, agent_path: Path, mixed_path: Path) -> None:
+    with wave.open(str(caller_path), "rb") as caller, wave.open(str(agent_path), "rb") as agent:
+        with wave.open(str(mixed_path), "wb") as mixed:
+            mixed.setnchannels(1)
+            mixed.setsampwidth(2)
+            mixed.setframerate(CALL_RATE)
+            while True:
+                caller_audio = caller.readframes(CALL_RATE)
+                agent_audio = agent.readframes(CALL_RATE)
+                if not caller_audio and not agent_audio:
+                    break
+                max_len = max(len(caller_audio), len(agent_audio))
+                caller_audio = caller_audio.ljust(max_len, b"\x00")
+                agent_audio = agent_audio.ljust(max_len, b"\x00")
+                mixed.writeframes(audioop.add(caller_audio, agent_audio, 2))
+
+
 async def open_session(chat_id: int):
     provider = make_provider()
     await provider.open()
     log.info("provider=%s opened (in=%d out=%d)",
              provider.name, provider.input_rate, provider.output_rate)
 
+    call_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    recording_base = CALL_RECORDINGS_DIR / f"call_{call_stamp}_{chat_id}"
+    caller_recording_path = recording_base.with_name(recording_base.name + "_caller.wav")
+    agent_recording_path = recording_base.with_name(recording_base.name + "_agent.wav")
+    mixed_recording_path = recording_base.with_name(recording_base.name + "_mixed.wav")
+
     state = {
         "provider": provider,
         "up_state": None,    # provider.output_rate -> 48k
+        "in_record_state": None,  # provider.input_rate -> 48k for caller recording
         "playback_buf": bytearray(),
         "ffmpeg_proc": None,
         "fifo_path": None,
+        "caller_recording_path": caller_recording_path,
+        "agent_recording_path": agent_recording_path,
+        "mixed_recording_path": mixed_recording_path,
+        "caller_recording": open_recording(caller_recording_path),
+        "agent_recording": open_recording(agent_recording_path),
     }
     sessions[chat_id] = state
+    log.info("recording call chat=%s caller=%s agent=%s mixed=%s",
+             chat_id, caller_recording_path, agent_recording_path, mixed_recording_path)
 
     async def reader():
         try:
@@ -101,6 +145,7 @@ def start_player(chat_id: int, calls: PyTgCalls):
                 chunk = silence
             try:
                 await calls.send_frame(chat_id, Device.MICROPHONE, chunk)
+                state["agent_recording"].writeframes(chunk)
             except Exception:
                 await asyncio.sleep(0.05)
                 next_t = time.monotonic()
@@ -166,6 +211,12 @@ async def start_inbound_pipe(chat_id: int, calls: PyTgCalls):
                 if not chunk:
                     break
                 sent += len(chunk)
+                record_chunk = chunk
+                if provider.input_rate != CALL_RATE:
+                    record_chunk, state["in_record_state"] = audioop.ratecv(
+                        chunk, 2, 1, provider.input_rate, CALL_RATE, state["in_record_state"]
+                    )
+                state["caller_recording"].writeframes(record_chunk)
                 try:
                     await provider.send_audio(chunk)
                 except Exception as e:
@@ -180,9 +231,14 @@ async def close_session(chat_id: int):
     state = sessions.pop(chat_id, None)
     if not state:
         return
+    tasks = []
     for k in ("reader_task", "player_task", "inbound_task"):
         t = state.get(k)
-        if t: t.cancel()
+        if t:
+            t.cancel()
+            tasks.append(t)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
     proc = state.get("ffmpeg_proc")
     if proc and proc.returncode is None:
         try:
@@ -193,6 +249,20 @@ async def close_session(chat_id: int):
             except Exception: pass
     try: await state["provider"].close()
     except Exception: pass
+    for key in ("caller_recording", "agent_recording"):
+        recording = state.get(key)
+        if recording:
+            try: recording.close()
+            except Exception: pass
+    caller_path = state.get("caller_recording_path")
+    agent_path = state.get("agent_recording_path")
+    mixed_path = state.get("mixed_recording_path")
+    if caller_path and agent_path and mixed_path:
+        try:
+            mix_recordings(caller_path, agent_path, mixed_path)
+            log.info("saved mixed call recording chat=%s path=%s", chat_id, mixed_path)
+        except Exception as e:
+            log.info("mix recording failed chat=%s: %s", chat_id, e)
     fifo = state.get("fifo_path")
     if fifo:
         try: os.unlink(fifo)

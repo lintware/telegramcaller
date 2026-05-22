@@ -47,7 +47,7 @@ Use this sequence:
 
 1. **Telegram API ID**
 
-   Ask: "First, please send your Telegram API ID. You can get it from https://my.telegram.org → log in → API development tools → App api_id."
+   Ask: "First, please send your Telegram API ID. To find it, open https://my.telegram.org, log in with the Telegram account that should answer calls, choose API development tools, create an app if Telegram asks you to, then copy the numeric App api_id."
 
    If the user does not have one yet, guide them:
    - Open https://my.telegram.org and log in with the Telegram account.

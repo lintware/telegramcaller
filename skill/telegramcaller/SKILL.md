@@ -1,9 +1,9 @@
 ---
-name: tgcallskill
+name: telegramcaller
 description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number answered by an AI voice agent. OpenAI Realtime is the default; if the user wants another realtime voice-to-voice model, ask for the model/provider name and configure the matching adapter.
 ---
 
-# tgcallskill - AI receptionist for your Telegram number
+# telegramcaller - AI receptionist for your Telegram number
 
 Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to a realtime voice-to-voice AI model.
 
@@ -44,7 +44,7 @@ For any other realtime voice-to-voice model/provider:
 - Ask only for the credentials required by that provider.
 - Configure the matching provider adapter, or add one under `providers/` before generating `.env`.
 
-The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
+The hosted setup wizard collects these and generates the `.env`.
 
 ## Credential Collection SOP
 
@@ -106,8 +106,8 @@ System dependencies by OS:
 Then:
 
 ```bash
-git clone https://github.com/vasanthsreeram/tgcallskill.git
-cd tgcallskill
+git clone https://github.com/vasanthsreeram/telegramcaller.git
+cd telegramcaller
 uv sync
 cp .env.example .env  # fill in credentials; OpenAI Realtime is the default
 uv run python login.py   # one-time interactive - enter Telegram OTP and 2FA if set

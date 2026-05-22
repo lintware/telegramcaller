@@ -1,5 +1,5 @@
 [project]
-name = "tgcallskill"
+name = "telegramcaller"
 version = "0.1.0"
 description = "AI receptionist for your Telegram number - auto-answer private calls and bridge audio to OpenAI Realtime or another realtime voice-to-voice model."
 requires-python = ">=3.12"

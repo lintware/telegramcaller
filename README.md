@@ -92,6 +92,7 @@ VOICE_PROVIDER=openai
 VOICE_SYSTEM_PROMPT="You are answering an incoming phone call. Be friendly, concise, and useful."
 INITIAL_GREETING_ENABLED=true
 INITIAL_GREETING_TEMPLATE="Hi! My name is {name}, how may I help you?"
+CALL_RECORDINGS_DIR=recordings
 
 # OpenAI Realtime
 OPENAI_API_KEY=sk-...
@@ -101,6 +102,8 @@ OPENAI_REALTIME_SPEED=1.08
 ```
 
 When a private call is accepted, the OpenAI Realtime provider immediately asks the agent to say the initial greeting before the caller speaks. `{name}` is filled from the Telegram account display name.
+
+Every call is recorded locally. On call close, the bridge writes only the mixed WAV file to `CALL_RECORDINGS_DIR` (`recordings/` by default).
 
 To use another realtime voice-to-voice model, name the model/provider during setup. The agent will collect the right credentials and configure or add the matching provider adapter.
 

@@ -70,8 +70,8 @@
     <input id="provider_key" required placeholder="sk-..." />
     <label for="voice_name">Voice name, optional</label>
     <input id="voice_name" placeholder="alloy" />
-    <label for="agent_id">Agent or project ID, only if that provider needs one</label>
-    <input id="agent_id" placeholder="agent_xxxx" />
+    <label for="adapter_name">Provider adapter name, only if not using OpenAI Realtime</label>
+    <input id="adapter_name" placeholder="provider-adapter-name" />
 
     <button type="submit">Generate setup</button>
   </form>
@@ -102,40 +102,20 @@ function openAIRealtimeModel(modelText) {
   return match ? match[1] : 'gpt-realtime-2';
 }
 
-function inferVoiceEnv(modelText, apiKey, voiceName, agentId) {
+function inferVoiceEnv(modelText, apiKey, voiceName, adapterName) {
   const model = modelText.trim();
   const lowered = model.toLowerCase();
   const voice = voiceName.trim();
-  const agent = agentId.trim();
+  const adapter = adapterName.trim();
+  const isOpenAI = !lowered || lowered.includes('openai') || lowered.includes('gpt-realtime') || lowered.includes('realtime api');
 
-  if (lowered.includes('elevenlabs') || lowered.includes('eleven labs')) {
-    return [
-      '# Voice model request: ' + model,
-      'VOICE_PROVIDER=elevenlabs',
-      'ELEVENLABS_API_KEY=' + apiKey,
-      'EL_AGENT_ID=' + agent,
-      '# ElevenLabs voice/model settings live inside the agent referenced by EL_AGENT_ID.',
-    ];
-  }
-
-  if (lowered.includes('gemini') || lowered.includes('google')) {
-    return [
-      '# Voice model request: ' + model,
-      'VOICE_PROVIDER=gemini',
-      'GOOGLE_API_KEY=' + apiKey,
-      'GEMINI_LIVE_MODEL=' + (model || 'models/gemini-3.1-flash-live-preview'),
-      'GEMINI_LIVE_VOICE=' + (voice || 'Aoede'),
-    ];
-  }
-
-  if (lowered && !lowered.includes('openai') && !lowered.includes('gpt-realtime') && !lowered.includes('realtime api')) {
+  if (!isOpenAI) {
     return [
       '# Voice model request: ' + model,
       '# This provider needs a matching providers/ adapter before bridge.py can run.',
-      'VOICE_PROVIDER=<provider-adapter-name>',
+      'VOICE_PROVIDER=' + (adapter || '<provider-adapter-name>'),
       'PROVIDER_API_KEY=' + apiKey,
       'PROVIDER_MODEL=' + model,
-      agent ? 'PROVIDER_AGENT_ID=' + agent : null,
       voice ? 'PROVIDER_VOICE=' + voice : null,
     ].filter(Boolean);
   }
@@ -159,7 +139,7 @@ $('wiz').addEventListener('submit', e => {
     'TG_PHONE=' + v('phone'),
     'TG_SESSION=telecall',
     'VOICE_SYSTEM_PROMPT="You are answering an incoming phone call. Be friendly, concise, and useful."',
-    ...inferVoiceEnv(v('voice_model'), v('provider_key'), v('voice_name'), v('agent_id')),
+    ...inferVoiceEnv(v('voice_model'), v('provider_key'), v('voice_name'), v('adapter_name')),
   ].join('\n');
   $('envblock').textContent = env;
   $('cmdblock').textContent =

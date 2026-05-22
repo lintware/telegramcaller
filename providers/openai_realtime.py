@@ -35,7 +35,7 @@ class OpenAIRealtimeProvider:
 
     def __init__(self) -> None:
         self.api_key = os.environ["OPENAI_API_KEY"]
-        self.model = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview")
+        self.model = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-2")
         self.voice = os.environ.get("OPENAI_REALTIME_VOICE", "alloy")
         self.ws = None
 
@@ -58,7 +58,6 @@ class OpenAIRealtimeProvider:
                     "input": {
                         "format": {"type": "audio/pcm", "rate": self.input_rate},
                         "turn_detection": {"type": "semantic_vad"},
-                        "transcription": {"model": "whisper-1"},
                     },
                     "output": {
                         "format": {"type": "audio/pcm", "rate": self.output_rate},

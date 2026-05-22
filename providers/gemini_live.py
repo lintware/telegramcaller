@@ -25,7 +25,7 @@ class GeminiLiveProvider:
 
     def __init__(self) -> None:
         self.api_key = os.environ["GOOGLE_API_KEY"]
-        self.model = os.environ.get("GEMINI_LIVE_MODEL", "models/gemini-2.0-flash-exp")
+        self.model = os.environ.get("GEMINI_LIVE_MODEL", "models/gemini-3.1-flash-live-preview")
         self.voice = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
         self.ws = None
 

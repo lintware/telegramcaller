@@ -11,7 +11,7 @@ Default voice stack: OpenAI Realtime API with `OPENAI_REALTIME_MODEL=gpt-realtim
 
 When a call is accepted, the local bridge should immediately trigger the voice agent to greet the caller before the caller speaks: `Hi! My name is {Telegram account display name}, how may I help you?`
 
-All calls should be recorded automatically. The bridge saves caller, agent, and mixed WAV files under `CALL_RECORDINGS_DIR` (default: `recordings/`) when each call session closes.
+All calls should be recorded automatically. The bridge saves only the mixed WAV file under `CALL_RECORDINGS_DIR` (default: `recordings/`) when each call session closes.
 
 If the user wants a different realtime voice-to-voice model, ask them to name it and then configure or add the matching provider adapter. Do not offer a menu of provider names.
 

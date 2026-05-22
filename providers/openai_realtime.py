@@ -58,7 +58,6 @@ class OpenAIRealtimeProvider:
                     "input": {
                         "format": {"type": "audio/pcm", "rate": self.input_rate},
                         "turn_detection": {"type": "semantic_vad"},
-                        "transcription": {"model": "whisper-1"},
                     },
                     "output": {
                         "format": {"type": "audio/pcm", "rate": self.output_rate},

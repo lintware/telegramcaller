@@ -91,7 +91,7 @@ TG_SESSION=telecall
 VOICE_PROVIDER=openai
 VOICE_SYSTEM_PROMPT="You are answering an incoming phone call. Be friendly, concise, and useful."
 INITIAL_GREETING_ENABLED=true
-INITIAL_GREETING_TEMPLATE="Hi! My name is {name}."
+INITIAL_GREETING_TEMPLATE="Hi! My name is {name}, how may I help you?"
 
 # OpenAI Realtime
 OPENAI_API_KEY=sk-...

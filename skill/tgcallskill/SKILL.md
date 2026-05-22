@@ -9,7 +9,7 @@ Local Python service that signs in to a Telegram account via MTProto, auto-answe
 
 Default voice stack: OpenAI Realtime API with `OPENAI_REALTIME_MODEL=gpt-realtime-2` and `OPENAI_REALTIME_VOICE=alloy`.
 
-When a call is accepted, the local bridge should immediately trigger the voice agent to greet the caller before the caller speaks: `Hi! My name is {Telegram account display name}.`
+When a call is accepted, the local bridge should immediately trigger the voice agent to greet the caller before the caller speaks: `Hi! My name is {Telegram account display name}, how may I help you?`
 
 If the user wants a different realtime voice-to-voice model, ask them to name it and then configure or add the matching provider adapter. Do not offer a menu of provider names.
 

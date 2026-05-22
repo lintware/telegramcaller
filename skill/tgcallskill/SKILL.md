@@ -1,22 +1,15 @@
 ---
 name: tgcallskill
-description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number to be answered by an AI voice agent, with OpenAI Realtime as the default and other realtime voice-to-voice providers configurable when requested. Triggers on terms like "answer Telegram calls", "AI Telegram phone", "Telegram voicebot", "auto-pickup Telegram", "OpenAI Realtime Telegram", "Gemini Live Telegram", "ElevenLabs Telegram".
+description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number answered by an AI voice agent. OpenAI Realtime is the default; if the user wants another realtime voice-to-voice model, ask for the model/provider name and configure the matching adapter.
 ---
 
 # tgcallskill - AI receptionist for your Telegram number
 
-Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to a real-time voice-AI provider for two-way conversation.
+Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to a realtime voice-to-voice AI model.
 
 Default voice stack: OpenAI Realtime API with `OPENAI_REALTIME_MODEL=gpt-realtime-2` and `OPENAI_REALTIME_VOICE=alloy`.
 
-Runtime adapters currently included in `providers/`:
-
-| Adapter | `VOICE_PROVIDER` value | Native PCM in / out |
-|---------|------------------------|---------------------|
-| OpenAI Realtime | `openai` | 24 kHz / 24 kHz |
-| ElevenLabs Conversational AI | `elevenlabs` | 16 kHz / 16 kHz |
-| Gemini Live | `gemini` | 16 kHz / 24 kHz |
-| xAI Grok | `grok` | stub - no public realtime voice API yet |
+If the user wants a different realtime voice-to-voice model, ask them to name it and then configure or add the matching provider adapter. Do not offer a menu of provider names.
 
 The bridge handles 48 kHz <-> provider-rate resampling internally.
 
@@ -27,19 +20,25 @@ Trigger when the user asks for any of:
 - "build a Telegram voicebot / receptionist"
 - "hook a realtime voice-to-voice model to Telegram phone calls"
 - "Telegram auto-pickup with AI voice"
+- "OpenAI Realtime Telegram"
 
-## Credentials checklist
+## Credentials Checklist
 
 Always required:
 1. **Telegram API id + hash** - https://my.telegram.org -> API development tools.
 2. **Phone number** with country code for the account that will answer calls.
-3. **One voice model/provider decision** - recommend OpenAI Realtime API with `gpt-realtime-2`; otherwise let the user name any realtime voice-to-voice model/provider they want.
+3. **One voice model/provider decision** - recommend OpenAI Realtime API with `gpt-realtime-2`; otherwise let the user name the realtime voice-to-voice model/provider they want.
 
-Provider-specific credentials are collected only after the model/provider decision is known:
-- **OpenAI Realtime default:** `OPENAI_API_KEY`. Use `OPENAI_REALTIME_MODEL=gpt-realtime-2` unless the user named a specific OpenAI Realtime model. Use `OPENAI_REALTIME_VOICE=alloy` unless they named a voice.
-- **ElevenLabs:** `ELEVENLABS_API_KEY` + `EL_AGENT_ID`. The voice and model are configured inside the ElevenLabs agent referenced by `EL_AGENT_ID`; this repo does not set an ElevenLabs model directly.
-- **Gemini:** `GOOGLE_API_KEY`. Use `GEMINI_LIVE_MODEL=models/gemini-3.1-flash-live-preview` unless the user named a specific Gemini Live model. Use `GEMINI_LIVE_VOICE=Aoede` unless they named a voice.
-- **Other realtime voice-to-voice model/provider:** collect the provider docs or model/API details, then implement or update a `providers/` adapter before generating `.env`.
+For the default OpenAI Realtime path:
+- Ask for `OPENAI_API_KEY`.
+- Use `OPENAI_REALTIME_MODEL=gpt-realtime-2` unless the user names a specific OpenAI Realtime model.
+- Use `OPENAI_REALTIME_VOICE=alloy` unless the user names a voice.
+
+For any other realtime voice-to-voice model/provider:
+- Ask for the exact model/provider name.
+- Collect the provider docs or API details if this repo does not already support it.
+- Ask only for the credentials required by that provider.
+- Configure the matching provider adapter, or add one under `providers/` before generating `.env`.
 
 The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
 
@@ -79,9 +78,7 @@ Use this sequence:
 
    Ask only for credentials needed by the selected model/provider:
    - OpenAI Realtime: ask for `OPENAI_API_KEY`.
-   - ElevenLabs: ask for `ELEVENLABS_API_KEY`, then `EL_AGENT_ID`. Do not ask for an ElevenLabs model in this repo; the model is configured in the ElevenLabs agent.
-   - Gemini Live: ask for `GOOGLE_API_KEY`.
-   - Any other provider: inspect its API requirements or ask for the relevant docs, then add a provider adapter if this repo does not already support it.
+   - Any other provider: inspect its API requirements or ask for the relevant docs, then add or configure the matching provider adapter.
 
 6. **Telegram login OTP**
 
@@ -119,21 +116,20 @@ uv run python bridge.py
 - **Inbound, caller to agent:** `pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3"))` makes ntgcalls' ffmpeg pipeline write peer audio as MP3 into a FIFO -> a child `ffmpeg` decodes the FIFO to PCM at `provider.input_rate` on stdout -> a reader task forwards chunks to `provider.send_audio`.
 - The `on_frames` callback is not used; ntgcalls does not deliver private-call peer PCM through it. The FIFO+ffmpeg detour is the workaround.
 
-## Provider interface
+## Provider Interface
 
 To add a new provider, implement `providers/base.Provider` with `open`, `send_audio`, `recv`, `close`, `input_rate`, and `output_rate`, register it in `providers/__init__.py`, then set `VOICE_PROVIDER=<your-name>` in `.env`.
 
-## Common failure modes
+## Common Failure Modes
 
 - **"Exchanging encryption keys" forever:** signaling accepted but media plane not started. Ensure `pytgcalls.play(...)` runs inside the `INCOMING_CALL` handler.
 - **Agent can't hear caller:** `pytgcalls.record(...)` was not called with a FIFO path. `on_frames` does not work for private calls.
 - **`Future attached to a different loop`:** `PyTgCalls(...)` was constructed at module level. Move it inside the async `main()`.
 - **Choppy outbound audio:** variable frame sizes. Standardize on 10 ms / 960 B at 48 kHz mono.
-- **`payment_required` from ElevenLabs:** free plan blocks premade voices via API; use a custom voice or upgrade.
 - **OpenAI Realtime auth error:** verify the bearer token and current Realtime API connection requirements.
-- **Gemini Live 4xx on setup:** model name should be `models/gemini-3.1-flash-live-preview` or another current Live API model; voice must be a valid `prebuilt_voice_config` voice.
+- **Other provider setup error:** verify the provider adapter, model name, voice name, credentials, and required websocket/session fields.
 
-## Deliverable when invoked
+## Deliverable When Invoked
 
 1. Ask for credentials one by one using the credential collection SOP above.
 2. Ask exactly one voice-to-voice model/provider question, recommending OpenAI Realtime API with `gpt-realtime-2`.

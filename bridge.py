@@ -43,6 +43,11 @@ TELEGRAM_ACCOUNT_NAME = os.environ.get("TELEGRAM_ACCOUNT_NAME", "")
 sessions: dict[int, dict] = {}
 
 
+def telegram_account_display_name(me) -> str:
+    full_name = " ".join(part for part in (me.first_name, me.last_name) if part)
+    return full_name or me.username or "ChatGPT"
+
+
 async def open_session(chat_id: int):
     provider = make_provider()
     await provider.open()
@@ -117,7 +122,7 @@ async def start_initial_greeting(chat_id: int):
     begin_call = getattr(provider, "begin_call", None)
     if not begin_call:
         return
-    account_name = os.environ.get("AGENT_DISPLAY_NAME") or TELEGRAM_ACCOUNT_NAME
+    account_name = TELEGRAM_ACCOUNT_NAME
     try:
         await begin_call(account_name)
         log.info("initial greeting requested chat=%s name=%s", chat_id, account_name)
@@ -228,7 +233,7 @@ async def main():
     await calls.start()
     me = await tele.get_me()
     global TELEGRAM_ACCOUNT_NAME
-    TELEGRAM_ACCOUNT_NAME = me.first_name or me.username or "ChatGPT"
+    TELEGRAM_ACCOUNT_NAME = telegram_account_display_name(me)
     os.environ["TELEGRAM_ACCOUNT_NAME"] = TELEGRAM_ACCOUNT_NAME
     log.info("READY as %s (+%s) provider=%s. Call to test.",
              me.first_name, me.phone, os.environ.get("VOICE_PROVIDER", "elevenlabs"))

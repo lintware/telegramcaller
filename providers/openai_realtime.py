@@ -75,10 +75,10 @@ class OpenAIRealtimeProvider:
             return
         if os.environ.get("INITIAL_GREETING_ENABLED", "true").lower() in ("0", "false", "no"):
             return
-        display_name = os.environ.get("AGENT_DISPLAY_NAME") or account_name or "ChatGPT"
+        display_name = account_name or "ChatGPT"
         template = os.environ.get(
             "INITIAL_GREETING_TEMPLATE",
-            "Hi! My name is {name}. I'm here to assist you.",
+            "Hi! My name is {name}.",
         )
         greeting = template.format(name=display_name)
         await self.ws.send(json.dumps({

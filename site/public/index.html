@@ -97,6 +97,11 @@
 <script>
 const $ = id => document.getElementById(id);
 
+function openAIRealtimeModel(modelText) {
+  const match = modelText.match(/\b(gpt-realtime[-\w.]*)\b/i);
+  return match ? match[1] : 'gpt-realtime-2';
+}
+
 function inferVoiceEnv(modelText, apiKey, voiceName, agentId) {
   const model = modelText.trim();
   const lowered = model.toLowerCase();
@@ -139,7 +144,7 @@ function inferVoiceEnv(modelText, apiKey, voiceName, agentId) {
     '# Voice model request: ' + model,
     'VOICE_PROVIDER=openai',
     'OPENAI_API_KEY=' + apiKey,
-    'OPENAI_REALTIME_MODEL=gpt-realtime-2',
+    'OPENAI_REALTIME_MODEL=' + openAIRealtimeModel(model),
     'OPENAI_REALTIME_VOICE=' + (voice || 'alloy'),
     'OPENAI_REALTIME_SPEED=1.08',
   ];

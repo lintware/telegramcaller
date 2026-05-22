@@ -1,7 +1,7 @@
 [project]
 name = "tgcallskill"
 version = "0.1.0"
-description = "AI receptionist for your Telegram number — auto-answer private calls and bridge audio to a real-time voice AI (ElevenLabs / OpenAI Realtime / Gemini Live)."
+description = "AI receptionist for your Telegram number - auto-answer private calls and bridge audio to OpenAI Realtime or another realtime voice-to-voice model."
 requires-python = ">=3.12"
 dependencies = [
     "cryptg>=0.6.0",

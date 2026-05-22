@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>tgcallskill - AI receptionist for your Telegram number</title>
+<title>telegramcaller - AI receptionist for your Telegram number</title>
 <meta name="description" content="Auto-answer Telegram calls with a realtime voice-to-voice AI agent. OpenAI Realtime is the default." />
 <style>
   :root {
@@ -89,7 +89,7 @@
   </div>
 
   <footer>
-    Source: <a href="https://github.com/vasanthsreeram/tgcallskill">github.com/vasanthsreeram/tgcallskill</a>.
+    Source: <a href="https://github.com/vasanthsreeram/telegramcaller">github.com/vasanthsreeram/telegramcaller</a>.
     Credentials are never sent anywhere. This page is fully static and runs in your browser.
   </footer>
 </div>
@@ -143,8 +143,8 @@ $('wiz').addEventListener('submit', e => {
   ].join('\n');
   $('envblock').textContent = env;
   $('cmdblock').textContent =
-`git clone https://github.com/vasanthsreeram/tgcallskill.git
-cd tgcallskill
+`git clone https://github.com/vasanthsreeram/telegramcaller.git
+cd telegramcaller
 cat > .env <<'EOF'
 ${env}
 EOF

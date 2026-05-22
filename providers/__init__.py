@@ -1,4 +1,4 @@
-"""Voice-agent providers for tgcallskill.
+"""Voice-agent providers for telegramcaller.
 
 Every provider implements the same async interface (see base.Provider) so
 bridge.py is agnostic to which one is configured. The active provider is

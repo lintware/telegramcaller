@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/banner.svg" alt="tgcallskill - AI receptionist for your Telegram number" width="100%" />
+<img src="docs/banner.svg" alt="telegramcaller - AI receptionist for your Telegram number" width="100%" />
 
-# tgcallskill
+# telegramcaller
 
 **Auto-answer Telegram private calls with an OpenAI Realtime voice agent.**
 
@@ -14,7 +14,7 @@ Your Telegram phone number rings, an AI picks up, hears the caller, and speaks b
 [![OpenAI Realtime](https://img.shields.io/badge/OpenAI-Realtime-412991?logo=openai&logoColor=white)](https://platform.openai.com/docs/guides/realtime)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](#license)
 
-[**Setup wizard ->**](https://tele.lintware.com) &nbsp;·&nbsp; [**Live demo**](#demo) &nbsp;·&nbsp; [**Architecture**](#architecture) &nbsp;·&nbsp; [**Configuration**](#configuration)
+[**Live demo**](#demo) &nbsp;·&nbsp; [**Architecture**](#architecture) &nbsp;·&nbsp; [**Configuration**](#configuration)
 
 </div>
 
@@ -48,15 +48,15 @@ Your Telegram phone number rings, an AI picks up, hears the caller, and speaks b
 ### 2. Get The Code And Run
 
 ```bash
-git clone https://github.com/vasanthsreeram/tgcallskill.git
-cd tgcallskill
+git clone https://github.com/vasanthsreeram/telegramcaller.git
+cd telegramcaller
 uv sync
 cp .env.example .env       # fill in Telegram + OpenAI credentials
 uv run python login.py     # one-time: enter Telegram OTP and 2FA if set
 uv run python bridge.py    # leave running; it auto-answers incoming calls
 ```
 
-Or use the setup wizard at <https://tele.lintware.com>. It asks for Telegram credentials and one realtime voice-to-voice model choice. OpenAI Realtime is the default.
+Edit `.env` directly from `.env.example`. Keep Telegram credentials and API keys local; do not paste them into hosted forms or public chats.
 
 ---
 
@@ -116,7 +116,7 @@ flowchart LR
     A[Caller: Telegram client] -- voice call --> B[Telegram servers]
     B <--> C[bridge.py: Telethon + pytgcalls auto-answer]
 
-    subgraph BRIDGE [tgcallskill]
+    subgraph BRIDGE [telegramcaller]
         direction TB
         C --> D[ntgcalls ffmpeg -> FIFO]
         D -- MP3 stream --> E[ffmpeg decoder -> PCM]
@@ -148,7 +148,7 @@ The `on_frames` callback is not used because current ntgcalls does not deliver p
 ├── providers/
 │   ├── base.py                     # provider protocol
 │   └── openai_realtime.py          # default voice-to-voice adapter
-├── skill/tgcallskill/SKILL.md      # skill metadata and setup flow
+├── skill/tgcallskill/SKILL.md      # optional OpenClaw skill metadata
 ├── site/public/index.html          # static setup wizard
 ├── docs/banner.svg
 └── .env.example
@@ -194,9 +194,9 @@ Check the bearer token, current Realtime API connection requirements, model name
 
 ## Privacy
 
-- The hosted wizard at <https://tele.lintware.com> is a fully static page. Credentials never leave your browser.
+- Your `.env` file and API credentials stay on the machine running `bridge.py`. Do not commit them.
 - Your Telegram session file (`telecall.session`) stays on the machine running `bridge.py`. Do not commit it.
-- The bridge stores no audio by default. Recording paths in the code are diagnostic only and are git-ignored.
+- If `CALL_RECORDINGS_DIR` is configured, mixed call recordings are written locally and ignored by git.
 
 ---
 

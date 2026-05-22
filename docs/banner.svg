@@ -21,6 +21,12 @@
   <rect width="1280" height="320" fill="url(#bg)"/>
   <rect width="1280" height="320" fill="url(#glow)"/>
 
+  <!-- Telegram mark -->
+  <g transform="translate(1194,28)">
+    <circle cx="26" cy="26" r="26" fill="#26A5E4" opacity="0.95"/>
+    <path d="M14 25.5 38.5 16c1.2-.5 2.2.4 1.8 1.8L35.6 39c-.4 1.6-1.7 2-3 1l-7.2-5.3-3.5 3.4c-.4.4-.8.7-1.5.7l.5-7.4L34.4 19c.6-.5-.1-.8-.9-.3L17 29.1l-7-2.2c-1.5-.5-1.5-1.5.3-2.2Z" fill="#fff"/>
+  </g>
+
   <!-- waveform -->
   <g stroke="url(#accent)" stroke-width="2" stroke-linecap="round" opacity="0.9" filter="url(#soft)">
     <path d="M40 200 Q 70 120, 100 200 T 160 200 T 220 200 T 280 200 T 340 200 T 400 200" fill="none"/>
@@ -55,7 +61,7 @@
     </g>
     <g transform="translate(172,220)">
       <rect width="160" height="32" rx="16" fill="#ffffff10" stroke="#ffffff22"/>
-      <text x="80" y="21" text-anchor="middle">OpenAI Realtime</text>
+      <text x="80" y="21" text-anchor="middle">gpt-realtime-2</text>
     </g>
     <g transform="translate(344,220)">
       <rect width="140" height="32" rx="16" fill="#ffffff10" stroke="#ffffff22"/>

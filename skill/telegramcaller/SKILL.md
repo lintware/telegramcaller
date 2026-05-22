@@ -1,19 +1,17 @@
 ---
 name: telegramcaller
-description: Auto-answer Telegram private calls with a real-time voice AI agent. Use when the user wants their Telegram phone number answered by an AI voice agent. OpenAI Realtime is the default; if the user wants another realtime voice-to-voice model, ask for the model/provider name and configure the matching adapter.
+description: Auto-answer Telegram private calls with a `gpt-realtime-2` voice agent. Use when the user wants their Telegram phone number answered by an AI voice agent.
 ---
 
 # telegramcaller - AI receptionist for your Telegram number
 
-Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to a realtime voice-to-voice AI model.
+Local Python service that signs in to a Telegram account via MTProto, auto-answers every incoming private call, and bridges the call audio to `gpt-realtime-2`.
 
-Default voice stack: OpenAI Realtime API with `OPENAI_REALTIME_MODEL=gpt-realtime-2` and `OPENAI_REALTIME_VOICE=alloy`.
+Default voice stack: `gpt-realtime-2` with `OPENAI_REALTIME_VOICE=alloy`.
 
 When a call is accepted, the local bridge should immediately trigger the voice agent to greet the caller before the caller speaks: `Hi! My name is {Telegram account display name}, how may I help you?`
 
 All calls should be recorded automatically. The bridge saves only the mixed WAV file under `CALL_RECORDINGS_DIR` (default: `recordings/`) when each call session closes.
-
-If the user wants a different realtime voice-to-voice model, ask them to name it and then configure or add the matching provider adapter. Do not offer a menu of provider names.
 
 The bridge handles 48 kHz <-> provider-rate resampling internally.
 
@@ -24,25 +22,18 @@ Trigger when the user asks for any of:
 - "build a Telegram voicebot / receptionist"
 - "hook a realtime voice-to-voice model to Telegram phone calls"
 - "Telegram auto-pickup with AI voice"
-- "OpenAI Realtime Telegram"
+- "gpt-realtime-2 Telegram"
 
 ## Credentials Checklist
 
 Always required:
 1. **Telegram API id + hash** - https://my.telegram.org -> API development tools.
 2. **Phone number** with country code for the account that will answer calls.
-3. **One voice model/provider decision** - recommend OpenAI Realtime API with `gpt-realtime-2`; otherwise let the user name the realtime voice-to-voice model/provider they want.
+3. **Model/voice decision** - use `gpt-realtime-2` and `alloy` unless the user names a specific model or voice.
 
-For the default OpenAI Realtime path:
 - Ask for `OPENAI_API_KEY`.
-- Use `OPENAI_REALTIME_MODEL=gpt-realtime-2` unless the user names a specific OpenAI Realtime model.
+- Use `OPENAI_REALTIME_MODEL=gpt-realtime-2` unless the user names a specific model.
 - Use `OPENAI_REALTIME_VOICE=alloy` unless the user names a voice.
-
-For any other realtime voice-to-voice model/provider:
-- Ask for the exact model/provider name.
-- Collect the provider docs or API details if this repo does not already support it.
-- Ask only for the credentials required by that provider.
-- Configure the matching provider adapter, or add one under `providers/` before generating `.env`.
 
 Generate `.env` locally from `.env.example`. Do not direct users to hosted credential collection pages.
 
@@ -72,17 +63,15 @@ Use this sequence:
 
    Ask: "What Telegram phone number should answer calls? Please include the country code, for example +14155552671."
 
-4. **Voice-to-voice model**
+4. **Model and voice**
 
-   Ask exactly one model/provider question: "Which realtime voice-to-voice model should power the call? Recommended: OpenAI Realtime API with `gpt-realtime-2`. You can also name a specific realtime voice-to-voice model/provider you want me to configure."
+   Ask exactly one model/voice question: "Which model and voice should power the call? Recommended: `gpt-realtime-2` with the `alloy` voice. You can also name a specific model or voice."
 
    If the user accepts the recommendation or gives no specific alternative, configure `VOICE_PROVIDER=openai`, `OPENAI_REALTIME_MODEL=gpt-realtime-2`, and `OPENAI_REALTIME_VOICE=alloy`.
 
 5. **Provider credentials**
 
-   Ask only for credentials needed by the selected model/provider:
-   - OpenAI Realtime: ask for `OPENAI_API_KEY`.
-   - Any other provider: inspect its API requirements or ask for the relevant docs, then add or configure the matching provider adapter.
+   Ask for `OPENAI_API_KEY`.
 
 6. **Telegram login OTP**
 
@@ -109,7 +98,7 @@ Then:
 git clone https://github.com/vasanthsreeram/telegramcaller.git
 cd telegramcaller
 uv sync
-cp .env.example .env  # fill in credentials; OpenAI Realtime is the default
+cp .env.example .env  # fill in credentials; gpt-realtime-2 is the default
 uv run python login.py   # one-time interactive - enter Telegram OTP and 2FA if set
 uv run python bridge.py
 ```
@@ -120,23 +109,18 @@ uv run python bridge.py
 - **Inbound, caller to agent:** `pytgcalls.record(RecordStream(audio="/tmp/peer_<id>.mp3"))` makes ntgcalls' ffmpeg pipeline write peer audio as MP3 into a FIFO -> a child `ffmpeg` decodes the FIFO to PCM at `provider.input_rate` on stdout -> a reader task forwards chunks to `provider.send_audio`.
 - The `on_frames` callback is not used; ntgcalls does not deliver private-call peer PCM through it. The FIFO+ffmpeg detour is the workaround.
 
-## Provider Interface
-
-To add a new provider, implement `providers/base.Provider` with `open`, `send_audio`, `recv`, `close`, `input_rate`, and `output_rate`, register it in `providers/__init__.py`, then set `VOICE_PROVIDER=<your-name>` in `.env`.
-
 ## Common Failure Modes
 
 - **"Exchanging encryption keys" forever:** signaling accepted but media plane not started. Ensure `pytgcalls.play(...)` runs inside the `INCOMING_CALL` handler.
 - **Agent can't hear caller:** `pytgcalls.record(...)` was not called with a FIFO path. `on_frames` does not work for private calls.
 - **`Future attached to a different loop`:** `PyTgCalls(...)` was constructed at module level. Move it inside the async `main()`.
 - **Choppy outbound audio:** variable frame sizes. Standardize on 10 ms / 960 B at 48 kHz mono.
-- **OpenAI Realtime auth error:** verify the bearer token and current Realtime API connection requirements.
-- **Other provider setup error:** verify the provider adapter, model name, voice name, credentials, and required websocket/session fields.
+- **gpt-realtime-2 auth error:** verify the bearer token and current Realtime API connection requirements.
 
 ## Deliverable When Invoked
 
 1. Ask for credentials one by one using the credential collection SOP above.
-2. Ask exactly one voice-to-voice model/provider question, recommending OpenAI Realtime API with `gpt-realtime-2`.
+2. Ask exactly one model/voice question, recommending `gpt-realtime-2` with `alloy`.
 3. `git clone` the repo.
 4. Generate `.env` from `.env.example` using the collected answers.
 5. Run `login.py`, feed OTP / 2FA.

@@ -70,6 +70,35 @@ class OpenAIRealtimeProvider:
             },
         }))
 
+    async def begin_call(self, account_name: str) -> None:
+        if not self.ws:
+            return
+        if os.environ.get("INITIAL_GREETING_ENABLED", "true").lower() in ("0", "false", "no"):
+            return
+        display_name = account_name or "ChatGPT"
+        template = os.environ.get(
+            "INITIAL_GREETING_TEMPLATE",
+            "Hi! My name is {name}.",
+        )
+        greeting = template.format(name=display_name)
+        await self.ws.send(json.dumps({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "The Telegram call has just connected. Before the caller speaks, "
+                            f"say exactly this greeting and nothing else: {greeting!r}"
+                        ),
+                    }
+                ],
+            },
+        }))
+        await self.ws.send(json.dumps({"type": "response.create"}))
+
     async def send_audio(self, pcm16: bytes) -> None:
         if not self.ws:
             return

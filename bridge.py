@@ -38,8 +38,14 @@ log = logging.getLogger("telecall.bridge")
 CALL_RATE = 48000
 FRAME_MS = 10
 FRAME_BYTES = int(CALL_RATE * 1 * 2 * FRAME_MS / 1000)  # 960 @ 48k mono 10ms
+TELEGRAM_ACCOUNT_NAME = os.environ.get("TELEGRAM_ACCOUNT_NAME", "")
 
 sessions: dict[int, dict] = {}
+
+
+def telegram_account_display_name(me) -> str:
+    full_name = " ".join(part for part in (me.first_name, me.last_name) if part)
+    return full_name or me.username or "ChatGPT"
 
 
 async def open_session(chat_id: int):
@@ -106,6 +112,22 @@ def start_player(chat_id: int, calls: PyTgCalls):
             else:
                 next_t = time.monotonic()
     state["player_task"] = asyncio.create_task(player())
+
+
+async def start_initial_greeting(chat_id: int):
+    state = sessions.get(chat_id)
+    if not state:
+        return
+    provider = state["provider"]
+    begin_call = getattr(provider, "begin_call", None)
+    if not begin_call:
+        return
+    account_name = TELEGRAM_ACCOUNT_NAME
+    try:
+        await begin_call(account_name)
+        log.info("initial greeting requested chat=%s name=%s", chat_id, account_name)
+    except Exception as e:
+        log.info("initial greeting failed chat=%s: %s", chat_id, e)
 
 
 async def start_inbound_pipe(chat_id: int, calls: PyTgCalls):
@@ -199,6 +221,7 @@ async def main():
                     await start_inbound_pipe(update.chat_id, calls)
                     await asyncio.sleep(0.3)
                     start_player(update.chat_id, calls)
+                    await start_initial_greeting(update.chat_id)
                     log.info("call fully armed (out + in)")
                 except Exception as e:
                     log.exception("accept failed: %s", e)
@@ -209,6 +232,9 @@ async def main():
 
     await calls.start()
     me = await tele.get_me()
+    global TELEGRAM_ACCOUNT_NAME
+    TELEGRAM_ACCOUNT_NAME = telegram_account_display_name(me)
+    os.environ["TELEGRAM_ACCOUNT_NAME"] = TELEGRAM_ACCOUNT_NAME
     log.info("READY as %s (+%s) provider=%s. Call to test.",
              me.first_name, me.phone, os.environ.get("VOICE_PROVIDER", "elevenlabs"))
     while True:

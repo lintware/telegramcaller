@@ -23,4 +23,7 @@ class Provider(Protocol):
         if False:
             yield {}
 
+    async def begin_call(self, account_name: str) -> None:
+        """Optional hook called after the Telegram call media is armed."""
+
     async def close(self) -> None: ...

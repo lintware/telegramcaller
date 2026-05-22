@@ -90,6 +90,8 @@ TG_SESSION=telecall
 # Voice agent
 VOICE_PROVIDER=openai
 VOICE_SYSTEM_PROMPT="You are answering an incoming phone call. Be friendly, concise, and useful."
+INITIAL_GREETING_ENABLED=true
+INITIAL_GREETING_TEMPLATE="Hi! My name is {name}. I'm here to assist you."
 
 # OpenAI Realtime
 OPENAI_API_KEY=sk-...
@@ -97,6 +99,8 @@ OPENAI_REALTIME_MODEL=gpt-realtime-2
 OPENAI_REALTIME_VOICE=alloy
 OPENAI_REALTIME_SPEED=1.08
 ```
+
+When a private call is accepted, the OpenAI Realtime provider immediately asks the agent to say the initial greeting before the caller speaks. `{name}` is filled from the Telegram account name, or `AGENT_DISPLAY_NAME` if you set one.
 
 To use another realtime voice-to-voice model, name the model/provider during setup. The agent will collect the right credentials and configure or add the matching provider adapter.
 

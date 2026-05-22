@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>tgcallskill — AI receptionist for your Telegram number</title>
-<meta name="description" content="Auto-answer Telegram calls with an ElevenLabs voice agent. Paste your keys, get a one-command setup." />
+<title>tgcallskill - AI receptionist for your Telegram number</title>
+<meta name="description" content="Auto-answer Telegram calls with a realtime voice-to-voice AI agent. OpenAI Realtime is the default." />
 <style>
   :root {
     --bg: #0a0a0c; --fg: #ededed; --mut: #8a8a8a; --acc: #6cf; --warn: #ffb86c;
@@ -16,9 +16,9 @@
     background: var(--bg); color: var(--fg);
   }
   .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
-  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -.01em; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: 0; }
   .tag { color: var(--mut); margin: 0 0 32px; }
-  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 8px; padding: 24px; margin-bottom: 18px; }
   h2 { font-size: 16px; margin: 0 0 14px; letter-spacing: .02em; text-transform: uppercase; color: var(--mut); }
   label { display: block; font-size: 13px; color: var(--mut); margin: 12px 0 4px; }
   input { width: 100%; padding: 10px 12px; background: #0d0e11; border: 1px solid var(--bd); color: var(--fg); border-radius: 8px; font: inherit; }
@@ -37,16 +37,17 @@
   footer a { color: var(--acc); }
   .copy { float: right; background: transparent; border: 1px solid var(--bd); color: var(--mut); padding: 4px 10px; font-size: 12px; cursor: pointer; border-radius: 6px; margin-top: 0; }
   .copy:hover { color: var(--fg); border-color: var(--mut); }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>tgcallskill <span class="pill">private preview</span></h1>
-  <p class="tag">Paste four credentials below — get the exact commands to make your Telegram number answered by an AI voice agent.</p>
+  <p class="tag">Paste your Telegram credentials and one realtime voice-to-voice model choice. OpenAI Realtime is used by default.</p>
 
   <form id="wiz" class="card">
     <h2>1. Telegram</h2>
-    <p class="hint">Get these from <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org → API development tools</a>.</p>
+    <p class="hint">Get these from <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org &gt; API development tools</a>.</p>
     <div class="row">
       <div>
         <label for="api_id">API ID</label>
@@ -54,18 +55,23 @@
       </div>
       <div>
         <label for="api_hash">API Hash</label>
-        <input id="api_hash" required placeholder="ee9c…" />
+        <input id="api_hash" required placeholder="ee9c..." />
       </div>
     </div>
-    <label for="phone">Phone number (with country code)</label>
-    <input id="phone" required placeholder="+917881174135" />
+    <label for="phone">Phone number with country code</label>
+    <input id="phone" required placeholder="+14155552671" />
 
-    <h2 style="margin-top:24px">2. ElevenLabs</h2>
-    <p class="hint">Key from <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">Settings → API Keys</a>. Agent from <a href="https://elevenlabs.io/app/conversational-ai" target="_blank" rel="noopener">Conversational AI</a>.</p>
-    <label for="el_key">API Key</label>
-    <input id="el_key" required placeholder="sk_…" />
-    <label for="agent_id">Agent ID</label>
-    <input id="agent_id" required placeholder="agent_xxxx" />
+    <h2 style="margin-top:24px">2. Voice Model</h2>
+    <label for="voice_model">Realtime voice-to-voice model</label>
+    <input id="voice_model" required value="OpenAI Realtime API / gpt-realtime-2" />
+    <p class="hint">Use the default, or type the exact realtime voice-to-voice model/provider you want configured.</p>
+
+    <label for="provider_key">API key for that model/provider</label>
+    <input id="provider_key" required placeholder="sk-..." />
+    <label for="voice_name">Voice name, optional</label>
+    <input id="voice_name" placeholder="alloy" />
+    <label for="agent_id">Agent or project ID, only if that provider needs one</label>
+    <input id="agent_id" placeholder="agent_xxxx" />
 
     <button type="submit">Generate setup</button>
   </form>
@@ -78,28 +84,77 @@
     <div class="card">
       <h2>Run these <button type="button" class="copy" data-target="cmdblock">copy</button></h2>
       <pre id="cmdblock"></pre>
-      <p class="hint">First time only: <code>login.py</code> will prompt for the Telegram SMS code (and 2FA password if your account has it).</p>
+      <p class="hint">First time only: <code>login.py</code> will prompt for the Telegram SMS code and 2FA password if your account has it.</p>
     </div>
   </div>
 
   <footer>
     Source: <a href="https://github.com/vasanthsreeram/tgcallskill">github.com/vasanthsreeram/tgcallskill</a>.
-    Credentials are never sent anywhere — this page is fully static, the form runs entirely in your browser.
+    Credentials are never sent anywhere. This page is fully static and runs in your browser.
   </footer>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
+
+function inferVoiceEnv(modelText, apiKey, voiceName, agentId) {
+  const model = modelText.trim();
+  const lowered = model.toLowerCase();
+  const voice = voiceName.trim();
+  const agent = agentId.trim();
+
+  if (lowered.includes('elevenlabs') || lowered.includes('eleven labs')) {
+    return [
+      '# Voice model request: ' + model,
+      'VOICE_PROVIDER=elevenlabs',
+      'ELEVENLABS_API_KEY=' + apiKey,
+      'EL_AGENT_ID=' + agent,
+      '# ElevenLabs voice/model settings live inside the agent referenced by EL_AGENT_ID.',
+    ];
+  }
+
+  if (lowered.includes('gemini') || lowered.includes('google')) {
+    return [
+      '# Voice model request: ' + model,
+      'VOICE_PROVIDER=gemini',
+      'GOOGLE_API_KEY=' + apiKey,
+      'GEMINI_LIVE_MODEL=' + (model || 'models/gemini-3.1-flash-live-preview'),
+      'GEMINI_LIVE_VOICE=' + (voice || 'Aoede'),
+    ];
+  }
+
+  if (lowered && !lowered.includes('openai') && !lowered.includes('gpt-realtime') && !lowered.includes('realtime api')) {
+    return [
+      '# Voice model request: ' + model,
+      '# This provider needs a matching providers/ adapter before bridge.py can run.',
+      'VOICE_PROVIDER=<provider-adapter-name>',
+      'PROVIDER_API_KEY=' + apiKey,
+      'PROVIDER_MODEL=' + model,
+      agent ? 'PROVIDER_AGENT_ID=' + agent : null,
+      voice ? 'PROVIDER_VOICE=' + voice : null,
+    ].filter(Boolean);
+  }
+
+  return [
+    '# Voice model request: ' + model,
+    'VOICE_PROVIDER=openai',
+    'OPENAI_API_KEY=' + apiKey,
+    'OPENAI_REALTIME_MODEL=gpt-realtime-2',
+    'OPENAI_REALTIME_VOICE=' + (voice || 'alloy'),
+    'OPENAI_REALTIME_SPEED=1.08',
+  ];
+}
+
 $('wiz').addEventListener('submit', e => {
   e.preventDefault();
   const v = id => $(id).value.trim();
   const env = [
-    `TG_API_ID=${v('api_id')}`,
-    `TG_API_HASH=${v('api_hash')}`,
-    `TG_PHONE=${v('phone')}`,
-    `TG_SESSION=telecall`,
-    `ELEVENLABS_API_KEY=${v('el_key')}`,
-    `EL_AGENT_ID=${v('agent_id')}`,
+    'TG_API_ID=' + v('api_id'),
+    'TG_API_HASH=' + v('api_hash'),
+    'TG_PHONE=' + v('phone'),
+    'TG_SESSION=telecall',
+    'VOICE_SYSTEM_PROMPT="You are answering an incoming phone call. Be friendly, concise, and useful."',
+    ...inferVoiceEnv(v('voice_model'), v('provider_key'), v('voice_name'), v('agent_id')),
   ].join('\n');
   $('envblock').textContent = env;
   $('cmdblock').textContent =
@@ -114,10 +169,11 @@ uv run python bridge.py`;
   $('out').style.display = '';
   $('out').scrollIntoView({behavior: 'smooth'});
 });
+
 document.querySelectorAll('.copy').forEach(b => b.onclick = async () => {
   const el = document.getElementById(b.dataset.target);
   await navigator.clipboard.writeText(el.textContent);
-  const old = b.textContent; b.textContent = 'copied'; setTimeout(()=>b.textContent=old, 1200);
+  const old = b.textContent; b.textContent = 'copied'; setTimeout(() => b.textContent = old, 1200);
 });
 </script>
 </body>

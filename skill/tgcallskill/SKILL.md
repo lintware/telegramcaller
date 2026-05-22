@@ -39,6 +39,53 @@ Provider-specific:
 
 The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
 
+## Credential collection SOP
+
+Ask for credentials one question at a time. Do not present a long form or ask for multiple secrets in one message. Keep the prompts calm, polished, and specific so the user always knows exactly what to paste next.
+
+Use this sequence:
+
+1. **Telegram API ID**
+
+   Ask: "First, please send your Telegram API ID. You can get it from https://my.telegram.org → log in → API development tools → App api_id."
+
+   If the user does not have one yet, guide them:
+   - Open https://my.telegram.org and log in with the Telegram account.
+   - Choose **API development tools**.
+   - Create an app if one does not already exist.
+   - Copy the numeric **App api_id**.
+
+2. **Telegram API hash**
+
+   Ask: "Now send your Telegram API hash from the same API development tools page. It is shown as App api_hash."
+
+   Remind them that the API hash is a secret and should not be posted publicly.
+
+3. **Telegram phone number**
+
+   Ask: "What Telegram phone number should answer calls? Please include the country code, for example +14155552671."
+
+4. **Voice provider**
+
+   Ask: "Which voice provider should power the call: ElevenLabs, OpenAI, or Gemini?"
+
+5. **Provider credentials**
+
+   Ask only for the credentials needed by the provider they chose:
+   - ElevenLabs: first ask for `ELEVENLABS_API_KEY`, then ask for `EL_AGENT_ID`.
+   - OpenAI: ask for `OPENAI_API_KEY`. Then ask whether they want to customize `OPENAI_REALTIME_MODEL` or `OPENAI_REALTIME_VOICE`; otherwise use the defaults.
+   - Gemini: ask for `GOOGLE_API_KEY`. Then ask whether they want to customize `GEMINI_LIVE_MODEL` or `GEMINI_LIVE_VOICE`; otherwise use the defaults.
+
+6. **Telegram login OTP**
+
+   After `.env` is prepared and `uv run python login.py` is started, ask: "Telegram just sent a login code. Please send me the OTP/code now."
+
+7. **Telegram 2FA password, only if prompted**
+
+   If Telegram asks for two-step verification, ask: "Your account has Telegram two-step verification enabled. Please enter the 2FA password so I can finish the local login."
+
+Do not ask for the next credential until the previous answer is received and validated enough to continue.
+
 ## Setup
 
 **Platform note:** runs on macOS and Linux natively. On Windows the user must install **WSL2** first (`wsl --install -d Ubuntu` in an admin PowerShell, then work inside the Ubuntu shell) — the bridge uses Unix named pipes and `/tmp`, so it will not run in native Windows Python.
@@ -81,9 +128,9 @@ To add a new provider, implement `providers/base.Provider` (open / send_audio / 
 
 ## Deliverable when invoked
 
-1. Confirm Telegram creds + chosen provider creds.
+1. Ask for credentials one by one using the credential collection SOP above.
 2. `git clone` the repo.
-3. Generate `.env` from `.env.example`.
+3. Generate `.env` from `.env.example` using the collected answers.
 4. Run `login.py`, feed OTP / 2FA.
 5. Run `bridge.py`, ask user to place a test call.
 6. On failure, consult the table above.

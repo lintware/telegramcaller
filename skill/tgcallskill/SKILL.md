@@ -33,9 +33,9 @@ Always required:
 2. **Phone number** (with country code) of the account that will answer.
 
 Provider-specific:
-- **ElevenLabs:** `ELEVENLABS_API_KEY` + `EL_AGENT_ID` (create at https://elevenlabs.io/app/conversational-ai).
-- **OpenAI:** `OPENAI_API_KEY`. Optional: `OPENAI_REALTIME_MODEL` (default `gpt-4o-realtime-preview`), `OPENAI_REALTIME_VOICE`.
-- **Gemini:** `GOOGLE_API_KEY`. Optional: `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_VOICE`.
+- **ElevenLabs:** `ELEVENLABS_API_KEY` + `EL_AGENT_ID` (create at https://elevenlabs.io/app/conversational-ai). Configure the ElevenLabs agent's voice/TTS model as `eleven_flash_v2_5`, the recommended latest low-latency default for real-time agents.
+- **OpenAI:** `OPENAI_API_KEY`. Optional: `OPENAI_REALTIME_MODEL` (default `gpt-realtime-2`, the API model ID for GPT-Realtime-2), `OPENAI_REALTIME_VOICE`.
+- **Gemini:** `GOOGLE_API_KEY`. Optional: `GEMINI_LIVE_MODEL` (default `models/gemini-3.1-flash-live-preview`), `GEMINI_LIVE_VOICE`.
 
 The hosted setup wizard at https://tele.lintware.com (or https://tgcallskill.pages.dev) collects these and generates the `.env`.
 
@@ -73,8 +73,8 @@ Use this sequence:
 
    Ask only for the credentials needed by the provider they chose:
    - ElevenLabs: first ask for `ELEVENLABS_API_KEY`, then ask for `EL_AGENT_ID`.
-   - OpenAI: ask for `OPENAI_API_KEY`. Then ask whether they want to customize `OPENAI_REALTIME_MODEL` or `OPENAI_REALTIME_VOICE`; otherwise use the defaults.
-   - Gemini: ask for `GOOGLE_API_KEY`. Then ask whether they want to customize `GEMINI_LIVE_MODEL` or `GEMINI_LIVE_VOICE`; otherwise use the defaults.
+   - OpenAI: ask for `OPENAI_API_KEY`. Then ask whether they want to customize `OPENAI_REALTIME_MODEL` or `OPENAI_REALTIME_VOICE`; otherwise use `gpt-realtime-2` for the model.
+   - Gemini: ask for `GOOGLE_API_KEY`. Then ask whether they want to customize `GEMINI_LIVE_MODEL` or `GEMINI_LIVE_VOICE`; otherwise use `models/gemini-3.1-flash-live-preview` for the model.
 
 6. **Telegram login OTP**
 
@@ -124,7 +124,7 @@ To add a new provider, implement `providers/base.Provider` (open / send_audio / 
 - **Choppy outbound audio:** variable frame sizes. Standardise on 10 ms / 960 B at 48 kHz mono.
 - **`payment_required` from ElevenLabs:** free plan blocks premade voices via API; use a custom voice or upgrade.
 - **OpenAI Realtime auth error:** verify the `OpenAI-Beta: realtime=v1` header and the bearer token.
-- **Gemini Live 4xx on setup:** model name must be `models/gemini-2.0-flash-exp` (or newer); voice must be a valid `prebuilt_voice_config` voice.
+- **Gemini Live 4xx on setup:** model name should be `models/gemini-3.1-flash-live-preview` or another current Live API model; voice must be a valid `prebuilt_voice_config` voice.
 
 ## Deliverable when invoked
 

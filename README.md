@@ -85,9 +85,9 @@ A real session log from the test run that shipped this release.
 
 | Provider          | `VOICE_PROVIDER` | Input → Output rate | Required env                                                  |
 |-------------------|------------------|---------------------|---------------------------------------------------------------|
-| ElevenLabs Convai | `elevenlabs`     | 16 kHz → 16 kHz     | `ELEVENLABS_API_KEY`, `EL_AGENT_ID`                           |
-| OpenAI Realtime   | `openai`         | 24 kHz → 24 kHz     | `OPENAI_API_KEY` (model + voice optional)                     |
-| Gemini Live       | `gemini`         | 16 kHz → 24 kHz     | `GOOGLE_API_KEY` (model + voice optional)                     |
+| ElevenLabs Convai | `elevenlabs`     | 16 kHz → 16 kHz     | `ELEVENLABS_API_KEY`, `EL_AGENT_ID`; configure the agent with `eleven_flash_v2_5` for the latest low-latency real-time voice default |
+| OpenAI Realtime   | `openai`         | 24 kHz → 24 kHz     | `OPENAI_API_KEY` (defaults to `gpt-realtime-2`) |
+| Gemini Live       | `gemini`         | 16 kHz → 24 kHz     | `GOOGLE_API_KEY` (defaults to `models/gemini-3.1-flash-live-preview`) |
 | xAI Grok          | `grok`           | —                   | Stub. No public realtime voice API yet; placeholder included. |
 
 The bridge handles 48 kHz ↔ provider-rate resampling internally — you don't worry about formats.
@@ -146,6 +146,13 @@ VOICE_PROVIDER=elevenlabs        # elevenlabs | openai | gemini | grok
 # ElevenLabs
 ELEVENLABS_API_KEY=sk_…
 EL_AGENT_ID=agent_xxx
+# Configure the ElevenLabs agent with eleven_flash_v2_5 for real-time voice.
+
+# OpenAI Realtime
+OPENAI_REALTIME_MODEL=gpt-realtime-2
+
+# Gemini Live
+GEMINI_LIVE_MODEL=models/gemini-3.1-flash-live-preview
 ```
 
 Switch provider → edit `VOICE_PROVIDER` → restart `bridge.py`. That's it.
@@ -215,7 +222,7 @@ Ensure the request carries both `Authorization: Bearer …` **and** `OpenAI-Beta
 <details>
 <summary><strong>Gemini Live setup error</strong></summary>
 
-Use a model name in the `models/gemini-2.0-flash-exp` family and a valid `prebuilt_voice_config` voice (e.g. `Aoede`, `Puck`).
+Use `models/gemini-3.1-flash-live-preview` or another current Live API model and a valid `prebuilt_voice_config` voice (e.g. `Aoede`, `Puck`).
 </details>
 
 ---

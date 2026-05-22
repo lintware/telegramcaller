@@ -61,21 +61,20 @@ def open_recording(path: Path) -> wave.Wave_write:
     return wav
 
 
-def mix_recordings(caller_path: Path, agent_path: Path, mixed_path: Path) -> None:
-    with wave.open(str(caller_path), "rb") as caller, wave.open(str(agent_path), "rb") as agent:
-        with wave.open(str(mixed_path), "wb") as mixed:
-            mixed.setnchannels(1)
-            mixed.setsampwidth(2)
-            mixed.setframerate(CALL_RATE)
-            while True:
-                caller_audio = caller.readframes(CALL_RATE)
-                agent_audio = agent.readframes(CALL_RATE)
-                if not caller_audio and not agent_audio:
-                    break
-                max_len = max(len(caller_audio), len(agent_audio))
-                caller_audio = caller_audio.ljust(max_len, b"\x00")
-                agent_audio = agent_audio.ljust(max_len, b"\x00")
-                mixed.writeframes(audioop.add(caller_audio, agent_audio, 2))
+def write_mixed_audio(state: dict, flush: bool = False) -> None:
+    caller_buf = state["caller_mix_buf"]
+    agent_buf = state["agent_mix_buf"]
+    if flush:
+        mix_len = max(len(caller_buf), len(agent_buf))
+    else:
+        mix_len = min(len(caller_buf), len(agent_buf))
+    if mix_len == 0:
+        return
+    caller_audio = bytes(caller_buf[:mix_len]).ljust(mix_len, b"\x00")
+    agent_audio = bytes(agent_buf[:mix_len]).ljust(mix_len, b"\x00")
+    state["mixed_recording"].writeframes(audioop.add(caller_audio, agent_audio, 2))
+    del caller_buf[:mix_len]
+    del agent_buf[:mix_len]
 
 
 async def open_session(chat_id: int):
@@ -86,26 +85,22 @@ async def open_session(chat_id: int):
 
     call_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     recording_base = CALL_RECORDINGS_DIR / f"call_{call_stamp}_{chat_id}"
-    caller_recording_path = recording_base.with_name(recording_base.name + "_caller.wav")
-    agent_recording_path = recording_base.with_name(recording_base.name + "_agent.wav")
     mixed_recording_path = recording_base.with_name(recording_base.name + "_mixed.wav")
 
     state = {
         "provider": provider,
         "up_state": None,    # provider.output_rate -> 48k
-        "in_record_state": None,  # provider.input_rate -> 48k for caller recording
+        "in_record_state": None,  # provider.input_rate -> 48k for mixed recording
         "playback_buf": bytearray(),
+        "caller_mix_buf": bytearray(),
+        "agent_mix_buf": bytearray(),
         "ffmpeg_proc": None,
         "fifo_path": None,
-        "caller_recording_path": caller_recording_path,
-        "agent_recording_path": agent_recording_path,
         "mixed_recording_path": mixed_recording_path,
-        "caller_recording": open_recording(caller_recording_path),
-        "agent_recording": open_recording(agent_recording_path),
+        "mixed_recording": open_recording(mixed_recording_path),
     }
     sessions[chat_id] = state
-    log.info("recording call chat=%s caller=%s agent=%s mixed=%s",
-             chat_id, caller_recording_path, agent_recording_path, mixed_recording_path)
+    log.info("recording mixed call chat=%s path=%s", chat_id, mixed_recording_path)
 
     async def reader():
         try:
@@ -145,7 +140,8 @@ def start_player(chat_id: int, calls: PyTgCalls):
                 chunk = silence
             try:
                 await calls.send_frame(chat_id, Device.MICROPHONE, chunk)
-                state["agent_recording"].writeframes(chunk)
+                state["agent_mix_buf"].extend(chunk)
+                write_mixed_audio(state)
             except Exception:
                 await asyncio.sleep(0.05)
                 next_t = time.monotonic()
@@ -216,7 +212,8 @@ async def start_inbound_pipe(chat_id: int, calls: PyTgCalls):
                     record_chunk, state["in_record_state"] = audioop.ratecv(
                         chunk, 2, 1, provider.input_rate, CALL_RATE, state["in_record_state"]
                     )
-                state["caller_recording"].writeframes(record_chunk)
+                state["caller_mix_buf"].extend(record_chunk)
+                write_mixed_audio(state)
                 try:
                     await provider.send_audio(chunk)
                 except Exception as e:
@@ -249,20 +246,15 @@ async def close_session(chat_id: int):
             except Exception: pass
     try: await state["provider"].close()
     except Exception: pass
-    for key in ("caller_recording", "agent_recording"):
-        recording = state.get(key)
-        if recording:
-            try: recording.close()
-            except Exception: pass
-    caller_path = state.get("caller_recording_path")
-    agent_path = state.get("agent_recording_path")
+    recording = state.get("mixed_recording")
     mixed_path = state.get("mixed_recording_path")
-    if caller_path and agent_path and mixed_path:
+    if recording and mixed_path:
         try:
-            mix_recordings(caller_path, agent_path, mixed_path)
+            write_mixed_audio(state, flush=True)
+            recording.close()
             log.info("saved mixed call recording chat=%s path=%s", chat_id, mixed_path)
         except Exception as e:
-            log.info("mix recording failed chat=%s: %s", chat_id, e)
+            log.info("mixed recording failed chat=%s: %s", chat_id, e)
     fifo = state.get("fifo_path")
     if fifo:
         try: os.unlink(fifo)
